@@ -24,7 +24,9 @@ def _cells(vertical: bool, **kwargs) -> list:
 @pytest.mark.parametrize("vertical", [True, False])
 @pytest.mark.parametrize("position", [0, 3.3, 17.6, 50, 80, 200])
 def test_thumb_is_drawn_with_foreground_glyph(vertical: bool, position: float) -> None:
-    cells = _cells(vertical, size=20, virtual_size=100, window_size=20, position=position)
+    cells = _cells(
+        vertical, size=20, virtual_size=100, window_size=20, position=position
+    )
     assert len(cells) == 20
     glyph = VERTICAL_THUMB if vertical else HORIZONTAL_THUMB
     thumb = [c for c in cells if c.text == glyph]
@@ -65,7 +67,9 @@ async def test_scrollbars_are_one_cell_and_thin(tmp_path: Path) -> None:
         (tmp_path / f"f{i:03}.txt").write_text("x")
     long = tmp_path / "long.txt"
     long.write_text("\n".join("line " * 40 for _ in range(200)))
-    app = TsumugiApp([long], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp(
+        [long], system_clipboard=False, config=Config(explorer_root=tmp_path)
+    )
     async with app.run_test(size=(80, 20)) as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")

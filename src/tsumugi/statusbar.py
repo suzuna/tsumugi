@@ -20,7 +20,9 @@ class StatusBar(Widget):
         super().__init__()
         self._left = ""
 
-    def update_status(self, name: str, dirty: bool, row: int, col: int, newline: str) -> None:
+    def update_status(
+        self, name: str, dirty: bool, row: int, col: int, newline: str
+    ) -> None:
         mark = " +" if dirty else ""
         eol = "dos" if newline == "\r\n" else "unix"
         self._left = f" {name}{mark} ({row + 1},{col + 1}) | {eol} | utf-8"

@@ -24,10 +24,14 @@ from textual.worker import get_current_worker
 TOGGLE_STYLE = Style.from_meta({"toggle": True})
 
 
-def sort_paths(paths: list[Path], desc: bool, is_dir: Callable[[Path], bool]) -> list[Path]:
+def sort_paths(
+    paths: list[Path], desc: bool, is_dir: Callable[[Path], bool]
+) -> list[Path]:
     """ディレクトリを先にして、それぞれの中を名前（大文字小文字を無視）で並べる。"""
     paths = sorted(paths, key=lambda p: p.name.lower(), reverse=desc)
-    return sorted(paths, key=lambda p: not is_dir(p))  # 安定ソートなので名前順は保たれる
+    return sorted(
+        paths, key=lambda p: not is_dir(p)
+    )  # 安定ソートなので名前順は保たれる
 
 
 class FileTree(DirectoryTree):
@@ -52,7 +56,9 @@ class FileTree(DirectoryTree):
         Binding("left", "collapse_or_parent", "Collapse", show=False),
     ]
 
-    def __init__(self, path: Path, show_hidden: bool = False, sort_desc: bool = False) -> None:
+    def __init__(
+        self, path: Path, show_hidden: bool = False, sort_desc: bool = False
+    ) -> None:
         super().__init__(path, classes="file-tree")
         self.show_hidden = show_hidden
         self.sort_desc = sort_desc
@@ -71,7 +77,9 @@ class FileTree(DirectoryTree):
         # それぞれの中の名前順を sort_desc で昇順 / 降順に切り替える
         assert node.data is not None
         path = node.data.path.expanduser().resolve()
-        paths = list(self.filter_paths(self._directory_content(path, get_current_worker())))
+        paths = list(
+            self.filter_paths(self._directory_content(path, get_current_worker()))
+        )
         return sort_paths(paths, self.sort_desc, self._safe_is_dir)
 
     def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
@@ -95,7 +103,9 @@ class FileTree(DirectoryTree):
         if self.cursor_line < 0 and self.last_line >= 0:
             self.cursor_line = 0
 
-    def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
+    def render_label(
+        self, node: TreeNode[DirEntry], base_style: Style, style: Style
+    ) -> Text:
         # DirectoryTree.render_label と同じスタイル付けで、絵文字の代わりに +/- を使う
         label = node._label.copy()
         label.stylize(style)
@@ -105,17 +115,25 @@ class FileTree(DirectoryTree):
         if node._allow_expand:
             prefix = ("- " if node.is_expanded else "+ ", base_style + TOGGLE_STYLE)
             label.append("/")
-            label.stylize_before(self.get_component_rich_style("directory-tree--folder", partial=True))
+            label.stylize_before(
+                self.get_component_rich_style("directory-tree--folder", partial=True)
+            )
         else:
             prefix = ("  ", base_style)
-            label.stylize_before(self.get_component_rich_style("directory-tree--file", partial=True))
+            label.stylize_before(
+                self.get_component_rich_style("directory-tree--file", partial=True)
+            )
             label.highlight_regex(
                 r"\..+$",
-                self.get_component_rich_style("directory-tree--extension", partial=True),
+                self.get_component_rich_style(
+                    "directory-tree--extension", partial=True
+                ),
             )
 
         if label.plain.startswith("."):
-            label.stylize_before(self.get_component_rich_style("directory-tree--hidden", partial=True))
+            label.stylize_before(
+                self.get_component_rich_style("directory-tree--hidden", partial=True)
+            )
         return Text.assemble(prefix, label)
 
     def action_expand_node(self) -> None:
@@ -287,16 +305,22 @@ class ExplorerScreen(ModalScreen[Path | None]):
         Binding("escape,ctrl+b,ctrl+q", "close", "Close", show=False),
     ]
 
-    def __init__(self, root: Path, show_hidden: bool = False, sort_desc: bool = False) -> None:
+    def __init__(
+        self, root: Path, show_hidden: bool = False, sort_desc: bool = False
+    ) -> None:
         super().__init__()
         self._initial_root = root
         self._initial_show_hidden = show_hidden
         self._initial_sort_desc = sort_desc
 
     def compose(self) -> ComposeResult:
-        panel = ExplorerPanel(self._initial_root, self._initial_show_hidden, self._initial_sort_desc)
+        panel = ExplorerPanel(
+            self._initial_root, self._initial_show_hidden, self._initial_sort_desc
+        )
         panel.border_title = "Explorer"
-        panel.border_subtitle = "Enter: open  BS: parent  .: hidden  s: sort  Esc: close"
+        panel.border_subtitle = (
+            "Enter: open  BS: parent  .: hidden  s: sort  Esc: close"
+        )
         yield panel
 
     def on_mount(self) -> None:
@@ -321,6 +345,8 @@ class ExplorerScreen(ModalScreen[Path | None]):
     def action_close(self) -> None:
         self.dismiss(None)
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+    def on_directory_tree_file_selected(
+        self, event: DirectoryTree.FileSelected
+    ) -> None:
         event.stop()
         self.dismiss(event.path)

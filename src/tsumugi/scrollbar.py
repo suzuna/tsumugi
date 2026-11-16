@@ -37,10 +37,15 @@ class ThinScrollBarRender(ScrollBarRender):
         blank = " " * width
         glyph = (VERTICAL_THUMB if vertical else HORIZONTAL_THUMB) * width
 
-        upper = Segment(blank, Style(bgcolor=back_color, meta={"@mouse.down": "scroll_up"}))
-        lower = Segment(blank, Style(bgcolor=back_color, meta={"@mouse.down": "scroll_down"}))
+        upper = Segment(
+            blank, Style(bgcolor=back_color, meta={"@mouse.down": "scroll_up"})
+        )
+        lower = Segment(
+            blank, Style(bgcolor=back_color, meta={"@mouse.down": "scroll_down"})
+        )
         thumb = Segment(
-            glyph, Style(color=bar_color, bgcolor=back_color, meta={"@mouse.down": "grab"})
+            glyph,
+            Style(color=bar_color, bgcolor=back_color, meta={"@mouse.down": "grab"}),
         )
 
         if window_size and size and virtual_size and size != virtual_size:
@@ -52,7 +57,9 @@ class ThinScrollBarRender(ScrollBarRender):
             ratio = min(1.0, max(0.0, ratio))
             start = min(size - length, round((size - thumb_size) * ratio))
             start = max(0, start)
-            segments = [upper] * start + [thumb] * length + [lower] * (size - start - length)
+            segments = (
+                [upper] * start + [thumb] * length + [lower] * (size - start - length)
+            )
         else:
             segments = [Segment(blank, Style(bgcolor=back_color))] * size
 

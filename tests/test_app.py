@@ -303,7 +303,9 @@ async def test_custom_css_is_applied(tmp_path: Path) -> None:
         "EditorScreen #sidebar { border-right: vkey #ea7599; }\n"
         "EditorScreen Buffer { background: #180b33; }\n"
     )
-    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css))
+    app = TsumugiApp(
+        [], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css)
+    )
     async with app.run_test() as pilot:
         await pilot.pause()
         bar = editor(app).query_one(StatusBar)

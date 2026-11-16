@@ -83,9 +83,13 @@ class Buffer(TextArea):
 
     def action_copy(self) -> None:
         """選択があればそれを、なければ現在行をコピー（micro と同じ）。"""
-        text = self.selected_text or self._line_text_with_newline(self.cursor_location[0])
+        text = self.selected_text or self._line_text_with_newline(
+            self.cursor_location[0]
+        )
         self.app.copy_to_clipboard(text)
-        self.app.show_message("Copied selection" if self.selected_text else "Copied line")
+        self.app.show_message(
+            "Copied selection" if self.selected_text else "Copied line"
+        )
 
     def action_cut(self) -> None:
         if self.read_only:

@@ -67,7 +67,9 @@ async def test_overwrite_asks_and_n_keeps_file(tmp_path: Path) -> None:
         await type_filename(pilot, app, str(target))
         # 確認のプロンプトが出たまま（名前のプロンプトを閉じた直後に勝手に閉じない）
         assert app.editor.infobar.active
-        assert "overwrite" in str(app.editor.infobar.query_one("#prompt-label").render())
+        assert "overwrite" in str(
+            app.editor.infobar.query_one("#prompt-label").render()
+        )
         await pilot.press("n")
         await pilot.pause()
         assert not app.editor.infobar.active

@@ -151,7 +151,9 @@ def test_css_relative_to_config_dir(xdg: Path) -> None:
     assert config.warnings == []
 
 
-def test_css_absolute_and_tilde(xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_css_absolute_and_tilde(
+    xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     home = tmp_path / "home"
     home.mkdir()
     (home / "my.tcss").write_text("")

@@ -8,7 +8,9 @@ from tsumugi.tabs import TabBar
 
 
 def make_app(root: Path, *files: Path) -> TsumugiApp:
-    return TsumugiApp(list(files), system_clipboard=False, config=Config(explorer_root=root))
+    return TsumugiApp(
+        list(files), system_clipboard=False, config=Config(explorer_root=root)
+    )
 
 
 def _tree(app: TsumugiApp) -> FileTree:
@@ -123,7 +125,9 @@ async def test_sidebar_disabled_while_prompting(tmp_path: Path) -> None:
 
 
 async def test_sidebar_open_at_startup_focuses_tree(tmp_path: Path) -> None:
-    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True))
+    app = TsumugiApp(
+        [], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True)
+    )
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.editor.sidebar_visible
@@ -134,7 +138,9 @@ async def test_sidebar_open_at_startup_focuses_tree(tmp_path: Path) -> None:
 async def test_sidebar_open_at_startup_with_file_focuses_editor(tmp_path: Path) -> None:
     f = tmp_path / "a.txt"
     f.write_text("a")
-    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True))
+    app = TsumugiApp(
+        [f], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True)
+    )
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.editor.sidebar_visible

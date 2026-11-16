@@ -21,7 +21,10 @@ async def _open_sidebar(root: Path):
 
 
 def _labels(tree: FileTree) -> list[str]:
-    return [tree.render_label(line.node, tree.rich_style, tree.rich_style).plain for line in tree._tree_lines]
+    return [
+        tree.render_label(line.node, tree.rich_style, tree.rich_style).plain
+        for line in tree._tree_lines
+    ]
 
 
 async def test_labels_use_micro_notation(root: Path) -> None:
@@ -198,10 +201,22 @@ async def test_toggle_sort_in_sidebar(sortable: Path) -> None:
         await pilot.press("ctrl+e")
         await pilot.pause(0.3)
         tree = app.editor.sidebar.query_one(FileTree)
-        assert _labels(tree) == ["+ dir1/", "+ dir2/", "  2021-a.md", "  2022-b.md", "  2023-c.md"]
+        assert _labels(tree) == [
+            "+ dir1/",
+            "+ dir2/",
+            "  2021-a.md",
+            "  2022-b.md",
+            "  2023-c.md",
+        ]
         await pilot.press("s")
         await pilot.pause(0.3)
-        assert _labels(tree) == ["+ dir2/", "+ dir1/", "  2023-c.md", "  2022-b.md", "  2021-a.md"]
+        assert _labels(tree) == [
+            "+ dir2/",
+            "+ dir1/",
+            "  2023-c.md",
+            "  2022-b.md",
+            "  2021-a.md",
+        ]
         assert app.editor.explorer_sort_desc
         # カーソルは並べ替え前と同じ dir1 についていく（2行目に移っている）
         assert tree.cursor_node.data.path == sortable / "dir1"
@@ -209,7 +224,11 @@ async def test_toggle_sort_in_sidebar(sortable: Path) -> None:
         # 開いたサブディレクトリの中も降順
         await pilot.press("up", "right")
         await pilot.pause(0.3)
-        assert _labels(tree)[:3] == ["- dir2/", "  2.md", "  1.md"]  # 字下げは Tree 側で付く
+        assert _labels(tree)[:3] == [
+            "- dir2/",
+            "  2.md",
+            "  1.md",
+        ]  # 字下げは Tree 側で付く
         await pilot.press("s")
         await pilot.pause(0.3)
         assert _labels(tree)[0] == "+ dir1/"
@@ -236,13 +255,23 @@ async def test_sort_order_shared_with_overlay(sortable: Path) -> None:
 
 
 async def test_tree_sort_desc_at_startup(sortable: Path) -> None:
-    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=sortable, tree_sort="desc"))
+    app = TsumugiApp(
+        [],
+        system_clipboard=False,
+        config=Config(explorer_root=sortable, tree_sort="desc"),
+    )
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")
         await pilot.pause(0.3)
         tree = app.editor.sidebar.query_one(FileTree)
-        assert _labels(tree) == ["+ dir2/", "+ dir1/", "  2023-c.md", "  2022-b.md", "  2021-a.md"]
+        assert _labels(tree) == [
+            "+ dir2/",
+            "+ dir1/",
+            "  2023-c.md",
+            "  2022-b.md",
+            "  2021-a.md",
+        ]
         await pilot.press("ctrl+w", "ctrl+b")
         await pilot.pause(0.3)
         assert _labels(app.screen.query_one(FileTree))[0] == "+ dir2/"
@@ -265,6 +294,10 @@ async def test_directory_names_are_not_bold(root: Path) -> None:
         dir_node = next(n for n in tree.root.children if n.allow_expand)
         label = tree.render_label(dir_node, tree.rich_style, tree.rich_style)
         assert label.plain == "+ sub/"
-        assert not any(span.style and getattr(span.style, "bold", False) for span in label.spans)
+        assert not any(
+            span.style and getattr(span.style, "bold", False) for span in label.spans
+        )
         # 拡張子の斜体はそのまま
-        assert tree.get_component_rich_style("directory-tree--extension", partial=True).italic
+        assert tree.get_component_rich_style(
+            "directory-tree--extension", partial=True
+        ).italic

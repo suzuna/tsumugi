@@ -127,7 +127,11 @@ class EditorScreen(Screen[None]):
         return switcher.get_child_by_id(switcher.current, Buffer)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if self.is_mounted and self.infobar.active and action not in _ALLOWED_WHILE_PROMPTING:
+        if (
+            self.is_mounted
+            and self.infobar.active
+            and action not in _ALLOWED_WHILE_PROMPTING
+        ):
             return False
         return True
 
@@ -242,7 +246,9 @@ class EditorScreen(Screen[None]):
             # どこに保存されるかわかるよう、基準のフォルダをプロンプトに出す
             where = truncate_left(display_path(base).rstrip("/") + "/", 30)
             self.infobar.ask(
-                f"Filename ({where}): ", on_name, on_cancel=lambda: self.message("Save cancelled")
+                f"Filename ({where}): ",
+                on_name,
+                on_cancel=lambda: self.message("Save cancelled"),
             )
             return
         self._do_save(buf, None, then)
@@ -394,7 +400,9 @@ class EditorScreen(Screen[None]):
         self.explorer_show_hidden = event.panel.show_hidden
         self.explorer_sort_desc = event.panel.sort_desc
 
-    async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+    async def on_directory_tree_file_selected(
+        self, event: DirectoryTree.FileSelected
+    ) -> None:
         event.stop()
         await self.open_path(event.path, focus=False)
 
@@ -505,17 +513,21 @@ class TsumugiApp(App[None], inherit_bindings=False):
         super().copy_to_clipboard(text)
         if self.system_clipboard and shutil.which("pbcopy"):
             try:
-                subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=2, check=False)
-            except (OSError, subprocess.SubprocessError):
+                subprocess.run(
+                    ["pbcopy"], input=text.encode("utf-8"), timeout=2, check=False
+                )
+            except OSError, subprocess.SubprocessError:
                 pass
 
     def read_clipboard(self) -> str:
         if self.system_clipboard and shutil.which("pbpaste"):
             try:
-                out = subprocess.run(["pbpaste"], capture_output=True, timeout=2, check=False)
+                out = subprocess.run(
+                    ["pbpaste"], capture_output=True, timeout=2, check=False
+                )
                 if out.returncode == 0:
                     return out.stdout.decode("utf-8", errors="replace")
-            except (OSError, subprocess.SubprocessError):
+            except OSError, subprocess.SubprocessError:
                 pass
         return self.clipboard
 

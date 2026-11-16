@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual import events
 from textual.message import Message
 from textual.widget import Widget
-from rich.text import Text
 
 
 class TabBar(Widget):

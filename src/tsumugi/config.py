@@ -67,7 +67,9 @@ def _read_explorer_root(data: dict, path: Path, config: Config) -> None:
         root_path = Path.home() / root_path
     root_path = root_path.resolve()
     if not root_path.is_dir():
-        config.warnings.append(f"{path}: explorer_root {root} is not a directory, using ~")
+        config.warnings.append(
+            f"{path}: explorer_root {root} is not a directory, using ~"
+        )
         return
     config.explorer_root = root_path
 
