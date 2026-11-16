@@ -327,3 +327,26 @@ async def test_status_bar_is_reversed_by_default() -> None:
         assert bar.styles.text_style.reverse
         # 反転は CSS 側だけで、描画するテキスト自体には付けない
         assert not bar.render().style
+
+
+async def test_selection_is_readable(tmp_path: Path) -> None:
+    # 選択範囲が「反転 + 文字色 ANSI 黒」で描かれると、反転後に読めなくなる
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        assert buf is not None
+        buf.load_text("abc\ndef")
+        buf.selection = Selection((0, 1), (1, 2))
+        await pilot.pause()
+        selected = [
+            seg
+            for y in range(2)
+            for seg in buf.render_line(y)
+            if seg.text.strip() and seg.style and seg.style.reverse
+        ]
+        texts = "".join(seg.text for seg in selected)
+        assert "bc" in texts and "de" in texts
+        for seg in selected:
+            if seg.text.strip() in ("bc", "de"):
+                assert seg.style.color is None or seg.style.color.is_default

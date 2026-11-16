@@ -18,6 +18,17 @@ class Buffer(TextArea):
     path が None のときは無題（未保存）バッファ。
     """
 
+    # 選択範囲: ansi テーマの既定は「反転 + 文字色 ANSI 黒」で、反転すると
+    # 背景色の文字が黒地に乗って読めない。文字色を既定に戻して反転だけにする。
+    # DEFAULT_CSS に置くのは、ユーザーのカスタム CSS で上書きできるようにするため
+    DEFAULT_CSS = """
+    Buffer:ansi .text-area--selection {
+        color: ansi_default;
+        background: transparent;
+        text-style: reverse;
+    }
+    """
+
     # TextArea のデフォルトのうち micro と食い違うものを上書きする
     BINDINGS = [
         Binding("ctrl+a", "select_all", "Select all", show=False),
