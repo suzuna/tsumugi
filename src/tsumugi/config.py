@@ -5,6 +5,7 @@
     sidebar = true              # 起動時にサイドバーを開く（既定は false）
     tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
     soft_wrap = true            # 長い行を右端で折り返す（既定は false）
+    css = "style.tcss"          # 見た目のカスタム CSS（相対パスは設定ファイルのディレクトリ基準）
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ class Config:
     sidebar: bool = False
     tree_sort: str = "asc"
     soft_wrap: bool = False
+    css: Path | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -45,6 +47,7 @@ def load_config(path: Path | None = None) -> Config:
     _read_sidebar(data, path, config)
     _read_tree_sort(data, path, config)
     _read_soft_wrap(data, path, config)
+    _read_css(data, path, config)
     return config
 
 
@@ -94,3 +97,21 @@ def _read_soft_wrap(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f"{path}: soft_wrap must be true or false")
         return
     config.soft_wrap = wrap
+
+
+def _read_css(data: dict, path: Path, config: Config) -> None:
+    css = data.get("css")
+    if css is None:
+        return
+    if not isinstance(css, str):
+        config.warnings.append(f"{path}: css must be a string")
+        return
+    css_path = Path(css).expanduser()
+    if not css_path.is_absolute():
+        # 相対パスは設定ファイルと同じディレクトリから探す
+        css_path = path.parent / css_path
+    css_path = css_path.resolve()
+    if not css_path.is_file():
+        config.warnings.append(f"{path}: css {css} is not a file, ignored")
+        return
+    config.css = css_path

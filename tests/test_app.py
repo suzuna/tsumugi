@@ -289,3 +289,39 @@ async def test_no_soft_wrap_by_default(tmp_path: Path) -> None:
         assert not buf.soft_wrap
         assert buf.wrapped_document.height == buf.document.line_count
         assert buf.show_horizontal_scrollbar
+
+
+async def test_custom_css_is_applied(tmp_path: Path) -> None:
+    from textual.color import Color
+
+    from tsumugi.config import Config
+    from tsumugi.statusbar import StatusBar
+
+    css = tmp_path / "style.tcss"
+    css.write_text(
+        "StatusBar { text-style: none; background: #ea7599; color: #ffffff; }\n"
+        "EditorScreen #sidebar { border-right: vkey #ea7599; }\n"
+        "EditorScreen Buffer { background: #180b33; }\n"
+    )
+    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        bar = editor(app).query_one(StatusBar)
+        assert bar.styles.background == Color.parse("#ea7599")
+        assert bar.styles.color == Color.parse("#ffffff")
+        assert not bar.styles.text_style.reverse
+        edge, color = editor(app).sidebar.styles.border_right
+        assert edge == "vkey" and color == Color.parse("#ea7599")
+        assert editor(app).current.styles.background == Color.parse("#180b33")
+
+
+async def test_status_bar_is_reversed_by_default() -> None:
+    from tsumugi.statusbar import StatusBar
+
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        bar = editor(app).query_one(StatusBar)
+        assert bar.styles.text_style.reverse
+        # 反転は CSS 側だけで、描画するテキスト自体には付けない
+        assert not bar.render().style

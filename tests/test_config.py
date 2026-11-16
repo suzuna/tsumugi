@@ -140,3 +140,35 @@ def test_soft_wrap_invalid_warns(xdg: Path) -> None:
     config = load_config()
     assert config.soft_wrap is False
     assert config.warnings
+
+
+def test_css_relative_to_config_dir(xdg: Path) -> None:
+    css = xdg.parent / "style.tcss"
+    css.write_text("StatusBar { color: red; }\n")
+    xdg.write_text('css = "style.tcss"\n')
+    config = load_config()
+    assert config.css == css.resolve()
+    assert config.warnings == []
+
+
+def test_css_absolute_and_tilde(xdg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "my.tcss").write_text("")
+    monkeypatch.setenv("HOME", str(home))
+    xdg.write_text('css = "~/my.tcss"\n')
+    assert load_config().css == (home / "my.tcss").resolve()
+
+
+def test_css_missing_file_warns(xdg: Path) -> None:
+    xdg.write_text('css = "nope.tcss"\n')
+    config = load_config()
+    assert config.css is None
+    assert config.warnings
+
+
+def test_css_not_string_warns(xdg: Path) -> None:
+    xdg.write_text("css = 1\n")
+    config = load_config()
+    assert config.css is None
+    assert config.warnings

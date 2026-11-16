@@ -431,10 +431,12 @@ class TsumugiApp(App[None], inherit_bindings=False):
         config: Config | None = None,
     ) -> None:
         install_scrollbar()
-        super().__init__()
+        config = config or Config()
+        # ユーザーの CSS は各ウィジェットの DEFAULT_CSS より優先される
+        super().__init__(css_path=config.css)
         self._files = files or []
         self.system_clipboard = system_clipboard
-        self.config = config or Config()
+        self.config = config
         self.theme = "ansi-dark"
 
     def on_mount(self) -> None:

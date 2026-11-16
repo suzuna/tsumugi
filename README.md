@@ -90,12 +90,52 @@ tree_sort = "desc"
 
 # 長い行を右端で折り返す（既定は false）。折り返した続きの行には行番号を付けない
 soft_wrap = true
+
+# 見た目のカスタム CSS（Textual CSS）
+css = "style.tcss"
 ```
 
 - `sidebar = true` のとき、ファイルを指定して起動したらエディタに、ファイルなしで起動したらツリーにフォーカスする
 
-- `~` は展開される。相対パスはホームディレクトリ基準
+- `explorer_root` の `~` は展開される。相対パスはホームディレクトリ基準
 - ディレクトリが存在しない、TOML が壊れているなどの場合は `~` で開き、起動時に下段へ警告を出す
+
+### カスタム CSS
+
+`css` に Textual CSS（`.tcss`）のパスを書くと、tsumugi の既定の見た目より優先して読み込む。`~` は展開され、相対パスは設定ファイルと同じディレクトリから探す。ファイルがなければ警告を出して無視する。CSS の書き方が間違っていると、起動時に Textual がエラーを出して止まる。
+
+主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。
+
+例: 背景を紫、下のバー・区切り線・スクロールバーをピンクにする
+
+```css
+EditorScreen,
+EditorScreen Buffer,
+ExplorerScreen > ExplorerPanel,
+HelpScreen > VerticalScroll {
+    background: #180b33;
+}
+
+StatusBar {
+    text-style: none;
+    background: #ea7599;
+    color: #ffffff;
+}
+
+EditorScreen #sidebar {
+    border-right: vkey #ea7599;
+}
+
+* {
+    scrollbar-color: #ea7599;
+    scrollbar-color-hover: #ea7599;
+    scrollbar-color-active: #ea7599;
+    scrollbar-background: #180b33;
+    scrollbar-background-hover: #180b33;
+    scrollbar-background-active: #180b33;
+    scrollbar-corner-color: #180b33;
+}
+```
 
 ## micro との違い
 

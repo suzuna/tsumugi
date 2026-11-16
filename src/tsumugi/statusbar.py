@@ -11,6 +11,8 @@ class StatusBar(Widget):
     StatusBar {
         height: 1;
         width: 1fr;
+        /* 反転は CSS で付ける（カスタム CSS で text-style: none にして色を指定できるように） */
+        text-style: reverse;
     }
     """
 
@@ -28,6 +30,6 @@ class StatusBar(Widget):
         right = "Ctrl-g for help "
         width = self.size.width
         pad = max(1, width - len(self._left) - len(right))
-        text = Text(self._left + " " * pad + right, style="reverse", no_wrap=True)
+        text = Text(self._left + " " * pad + right, no_wrap=True)
         text.truncate(width)
         return text
