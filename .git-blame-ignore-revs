@@ -1,0 +1,5 @@
+# git blameで除外するコミット（整形だけのコミットなど）
+# ローカルで使うには、クローンごとに一度: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# ruffでimport順とフォーマットを整える
+30e10f9b8e70a9f5d536e23b85d59107190032d6
