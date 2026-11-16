@@ -9,12 +9,13 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import ContentSwitcher, TextArea
+from textual.widgets import ContentSwitcher, DirectoryTree, TextArea
 
 from .config import Config, load_config
 from .editor import Buffer
-from .explorer import ExplorerScreen
+from .explorer import ExplorerPanel, ExplorerScreen
 from .help import HelpScreen
 from .prompt import InfoBar
 from .statusbar import StatusBar
@@ -29,7 +30,23 @@ class EditorScreen(Screen[None]):
     EditorScreen {
         layout: vertical;
     }
-    EditorScreen > ContentSwitcher {
+    EditorScreen > #main {
+        height: 1fr;
+    }
+    EditorScreen #sidebar {
+        display: none;
+        width: 30;
+        height: 1fr;
+        border-right: vkey $foreground 30%;
+    }
+    EditorScreen #sidebar.-visible {
+        display: block;
+    }
+    EditorScreen #editor-area {
+        width: 1fr;
+        height: 1fr;
+    }
+    EditorScreen ContentSwitcher {
         height: 1fr;
     }
     EditorScreen Buffer {
@@ -54,6 +71,8 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+n", "find_next", "Find next", priority=True),
         Binding("ctrl+p", "find_prev", "Find previous", priority=True),
         Binding("ctrl+g", "help", "Help", priority=True),
+        Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
+        Binding("ctrl+w", "switch_pane", "Switch pane", priority=True),
     ]
 
     def __init__(self, files: list[Path], config: Config) -> None:
@@ -66,8 +85,12 @@ class EditorScreen(Screen[None]):
         self.explorer_show_hidden = False
 
     def compose(self) -> ComposeResult:
-        yield TabBar()
-        yield ContentSwitcher()
+        with Horizontal(id="main"):
+            # サイドバーの中身（ツリー）は最初に表示したときに作る
+            yield Vertical(id="sidebar")
+            with Vertical(id="editor-area"):
+                yield TabBar()
+                yield ContentSwitcher()
         yield StatusBar()
         yield InfoBar()
 
@@ -102,14 +125,15 @@ class EditorScreen(Screen[None]):
 
     # ---- バッファ・タブ管理 ----
 
-    async def add_buffer(self, buf: Buffer) -> None:
+    async def add_buffer(self, buf: Buffer, focus: bool = True) -> None:
         self.buffers.append(buf)
         await self.query_one(ContentSwitcher).mount(buf)
-        self.switch_to(buf)
+        self.switch_to(buf, focus)
 
-    def switch_to(self, buf: Buffer) -> None:
+    def switch_to(self, buf: Buffer, focus: bool = True) -> None:
         self.query_one(ContentSwitcher).current = buf.id
-        buf.focus()
+        if focus:
+            buf.focus()
         self.refresh_bars()
 
     def refresh_bars(self) -> None:
@@ -123,11 +147,12 @@ class EditorScreen(Screen[None]):
                 buf.display_name, buf.dirty, row, col, buf.document.newline
             )
 
-    async def open_path(self, path: Path) -> None:
+    async def open_path(self, path: Path, focus: bool = True) -> None:
+        """ファイルを開く。focus=False ならフォーカスを動かさない（サイドバーから開くとき）。"""
         path = path.expanduser().resolve()
         for buf in self.buffers:
             if buf.path == path:
-                self.switch_to(buf)
+                self.switch_to(buf, focus)
                 return
         if path.is_dir():
             self.message(f"{path} is a directory")
@@ -152,9 +177,9 @@ class EditorScreen(Screen[None]):
             self.buffers[index] = new
             await self.query_one(ContentSwitcher).mount(new)
             await cur.remove()
-            self.switch_to(new)
+            self.switch_to(new, focus)
         else:
-            await self.add_buffer(new)
+            await self.add_buffer(new, focus)
         if not path.exists():
             self.message(f"New file: {path}")
 
@@ -255,6 +280,59 @@ class EditorScreen(Screen[None]):
                 self.app.focus_editor()
 
         self.app.push_screen(screen, on_close)
+
+    # ---- サイドバー ----
+
+    @property
+    def sidebar(self) -> Vertical:
+        return self.query_one("#sidebar", Vertical)
+
+    @property
+    def sidebar_visible(self) -> bool:
+        return self.sidebar.has_class("-visible")
+
+    def _sidebar_panel(self) -> ExplorerPanel | None:
+        panels = self.sidebar.query(ExplorerPanel)
+        return panels.first() if panels else None
+
+    async def action_toggle_sidebar(self) -> None:
+        sidebar = self.sidebar
+        if self.sidebar_visible:
+            sidebar.remove_class("-visible")
+            self.app.focus_editor()
+            return
+        panel = self._sidebar_panel()
+        if panel is None:
+            panel = ExplorerPanel(self.explorer_root, self.explorer_show_hidden)
+            await sidebar.mount(panel)
+        else:
+            # 隠している間にオーバーレイで移動していたら、そこに合わせる
+            if panel.root != self.explorer_root:
+                panel.set_root(self.explorer_root)
+            if panel.show_hidden != self.explorer_show_hidden:
+                panel.action_toggle_hidden()
+        sidebar.add_class("-visible")
+        panel.tree.focus()
+
+    def action_switch_pane(self) -> None:
+        if not self.sidebar_visible:
+            return
+        panel = self._sidebar_panel()
+        if panel is None:
+            return
+        if panel.tree.has_focus:
+            self.app.focus_editor()
+        else:
+            panel.tree.focus()
+
+    def on_explorer_panel_changed(self, event: ExplorerPanel.Changed) -> None:
+        # サイドバーで移動・切替したら、オーバーレイの次回の起点にも反映する
+        self.explorer_root = event.panel.root
+        self.explorer_show_hidden = event.panel.show_hidden
+
+    async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        event.stop()
+        await self.open_path(event.path, focus=False)
 
     def action_help(self) -> None:
         self.app.push_screen(HelpScreen(), lambda _: self.app.focus_editor())
