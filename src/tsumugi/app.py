@@ -12,6 +12,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import ContentSwitcher, TextArea
 
+from .config import Config, load_config
 from .editor import Buffer
 from .explorer import ExplorerScreen
 from .help import HelpScreen
@@ -55,12 +56,13 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+g", "help", "Help", priority=True),
     ]
 
-    def __init__(self, files: list[Path]) -> None:
+    def __init__(self, files: list[Path], config: Config) -> None:
         super().__init__()
         self._initial_files = files
+        self._config = config
         self.buffers: list[Buffer] = []
         self.last_search = ""
-        self.explorer_root = Path.home()
+        self.explorer_root = config.explorer_root
         self.explorer_show_hidden = False
 
     def compose(self) -> ComposeResult:
@@ -74,6 +76,8 @@ class EditorScreen(Screen[None]):
             await self.open_path(path)
         if not self.buffers:
             await self.add_buffer(Buffer())
+        if self._config.warnings:
+            self.message(self._config.warnings[0])
 
     # ---- 便利プロパティ ----
 
@@ -313,14 +317,20 @@ class TsumugiApp(App[None], inherit_bindings=False):
     # Textual 既定の Ctrl+Q（即終了）と Ctrl+C（終了ヘルプ）を外す
     BINDINGS = []
 
-    def __init__(self, files: list[Path] | None = None, system_clipboard: bool = True) -> None:
+    def __init__(
+        self,
+        files: list[Path] | None = None,
+        system_clipboard: bool = True,
+        config: Config | None = None,
+    ) -> None:
         super().__init__()
         self._files = files or []
         self.system_clipboard = system_clipboard
+        self.config = config or Config()
         self.theme = "ansi-dark"
 
     def on_mount(self) -> None:
-        self.push_screen(EditorScreen(self._files))
+        self.push_screen(EditorScreen(self._files, self.config))
 
     @property
     def editor(self) -> EditorScreen:
@@ -360,7 +370,7 @@ class TsumugiApp(App[None], inherit_bindings=False):
 
 def main() -> None:
     files = [Path(arg) for arg in sys.argv[1:]]
-    TsumugiApp(files).run()
+    TsumugiApp(files, config=load_config()).run()
 
 
 if __name__ == "__main__":
