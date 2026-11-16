@@ -249,3 +249,22 @@ async def test_tree_sort_desc_at_startup(sortable: Path) -> None:
         await pilot.press("escape", "ctrl+w", "s")
         await pilot.pause(0.3)
         assert _labels(tree)[0] == "+ dir1/"
+
+
+async def test_directory_names_are_not_bold(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        # アプリは ANSI テーマなので、:ansi 側の指定も打ち消せていること
+        assert tree.app.ansi_color or tree.app.current_theme.ansi
+        folder = tree.get_component_rich_style("directory-tree--folder", partial=True)
+        assert not folder.bold
+        dir_node = next(n for n in tree.root.children if n.allow_expand)
+        label = tree.render_label(dir_node, tree.rich_style, tree.rich_style)
+        assert label.plain == "+ sub/"
+        assert not any(span.style and getattr(span.style, "bold", False) for span in label.spans)
+        # 拡張子の斜体はそのまま
+        assert tree.get_component_rich_style("directory-tree--extension", partial=True).italic

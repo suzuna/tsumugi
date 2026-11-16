@@ -37,6 +37,16 @@ class FileTree(DirectoryTree):
     罫線とルートノードは出さず、階層ごとに空白2つで字下げする。
     """
 
+    # DirectoryTree はディレクトリ名を太字にする（ANSI テーマ用の指定も別にある）ので、両方打ち消す
+    DEFAULT_CSS = """
+    FileTree > .directory-tree--folder {
+        text-style: none;
+    }
+    FileTree:ansi > .directory-tree--folder {
+        text-style: none;
+    }
+    """
+
     BINDINGS = [
         Binding("right", "expand_node", "Expand", show=False),
         Binding("left", "collapse_or_parent", "Collapse", show=False),
