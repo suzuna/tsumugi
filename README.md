@@ -46,6 +46,16 @@ tsumugi a.txt b.txt  # 複数ファイルをタブで開く
 
 ### エクスプローラ
 
+ツリーは micro の filemanager と同じ書き方で、ディレクトリは `+ name/`（閉）/ `- name/`（開）、ファイルは字下げだけで表示する。
+
+```
+~/repos/tsumugi
++ src/
+- tests/
+    test_app.py
+  README.md
+```
+
 ツリーは2通りで出せる。
 
 - Ctrl+B: 画面中央にオーバーレイで出る。ファイルを選ぶと閉じてエディタへ戻る

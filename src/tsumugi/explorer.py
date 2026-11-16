@@ -5,23 +5,72 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+from rich.style import Style
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import DirectoryTree, Label
+from textual.widgets.directory_tree import DirEntry
+from textual.widgets.tree import TreeNode
+
+# Textual の Tree と同じ。この meta が付いた部分をクリックすると開閉する
+TOGGLE_STYLE = Style.from_meta({"toggle": True})
 
 
 class FileTree(DirectoryTree):
+    """micro の filemanager 風のツリー。
+
+    ディレクトリは `+ name/`（閉）/ `- name/`（開）、ファイルは `  name`。
+    罫線とルートノードは出さず、階層ごとに空白2つで字下げする。
+    """
+
     def __init__(self, path: Path, show_hidden: bool = False) -> None:
         super().__init__(path, classes="file-tree")
         self.show_hidden = show_hidden
+        self.show_root = False
+        self.show_guides = False
+        self.guide_depth = 2
 
     def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
         if self.show_hidden:
             return paths
         return [p for p in paths if not p.name.startswith(".")]
+
+    def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
+        super()._populate_node(node, content)
+        # ルートを隠すと最初はカーソルがどの行にもない。ルートの読み込み後に先頭行へ置く
+        if node is self.root and self.cursor_line < 0:
+            self.call_after_refresh(self._cursor_to_first_line)
+
+    def _cursor_to_first_line(self) -> None:
+        if self.cursor_line < 0 and self.last_line >= 0:
+            self.cursor_line = 0
+
+    def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
+        # DirectoryTree.render_label と同じスタイル付けで、絵文字の代わりに +/- を使う
+        label = node._label.copy()
+        label.stylize(style)
+        if not self.is_mounted:
+            return label
+
+        if node._allow_expand:
+            prefix = ("- " if node.is_expanded else "+ ", base_style + TOGGLE_STYLE)
+            label.append("/")
+            label.stylize_before(self.get_component_rich_style("directory-tree--folder", partial=True))
+        else:
+            prefix = ("  ", base_style)
+            label.stylize_before(self.get_component_rich_style("directory-tree--file", partial=True))
+            label.highlight_regex(
+                r"\..+$",
+                self.get_component_rich_style("directory-tree--extension", partial=True),
+            )
+
+        if label.plain.startswith("."):
+            label.stylize_before(self.get_component_rich_style("directory-tree--hidden", partial=True))
+        return Text.assemble(prefix, label)
 
 
 def _root_label(root: Path) -> str:
