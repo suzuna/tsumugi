@@ -135,7 +135,7 @@ class FileTree(DirectoryTree):
             self.move_cursor(parent)
 
 
-def _root_label(root: Path) -> str:
+def display_path(root: Path) -> str:
     try:
         rel = root.relative_to(Path.home())
     except ValueError:
@@ -228,7 +228,7 @@ class ExplorerPanel(Vertical):
         self.sort_desc = sort_desc
 
     def compose(self) -> ComposeResult:
-        yield RootPath(_root_label(self.root))
+        yield RootPath(display_path(self.root))
         yield FileTree(self.root, self.show_hidden, self.sort_desc)
 
     @property
@@ -238,7 +238,7 @@ class ExplorerPanel(Vertical):
     def set_root(self, root: Path) -> None:
         self.root = root
         self.tree.path = root
-        self.query_one(RootPath).set_path(_root_label(root))
+        self.query_one(RootPath).set_path(display_path(root))
         self.post_message(self.Changed(self))
 
     def action_parent(self) -> None:

@@ -129,3 +129,58 @@ async def test_close_save_overwrite_then_closes(tmp_path: Path) -> None:
         await pilot.pause()
         assert target.read_text() == "z"
         assert len(app.editor.buffers) == 1
+
+
+async def test_relative_name_saves_under_explorer_root(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a", "ctrl+s")
+        label = str(app.editor.infobar.query_one("#prompt-label").render())
+        assert label.startswith("Filename (") and label.rstrip().endswith("/):")
+        await type_filename(pilot, app, "note.md")
+        assert (tmp_path / "note.md").read_text() == "a"
+
+
+async def test_relative_name_follows_sidebar_root(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    app = make_app(tmp_path, explorer_root=sub)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        await pilot.press("backspace")  # ツリーの起点を tmp_path に上げる
+        await pilot.pause()
+        await pilot.press("ctrl+w", "b", "ctrl+s")
+        await type_filename(pilot, app, "up.md")
+        assert (tmp_path / "up.md").read_text() == "b"
+        assert not (sub / "up.md").exists()
+
+
+async def test_absolute_and_tilde_names_are_kept(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a", "ctrl+s")
+        await type_filename(pilot, app, str(other / "abs.md"))
+        assert (other / "abs.md").read_text() == "a"
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        await pilot.press("b", "ctrl+s")
+        await type_filename(pilot, app, "~/tilde.md")
+        assert (home / "tilde.md").read_text() == "b"
+
+
+async def test_relative_name_with_new_dir_and_mkparents(tmp_path: Path) -> None:
+    app = make_app(tmp_path, mkparents=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("c", "ctrl+s")
+        await type_filename(pilot, app, "20261117-test/index.qmd")
+        assert (tmp_path / "20261117-test" / "index.qmd").read_text() == "c"

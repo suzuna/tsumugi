@@ -18,7 +18,7 @@ from textual.widgets import ContentSwitcher, DirectoryTree, TextArea
 
 from .config import Config, load_config
 from .editor import Buffer
-from .explorer import ExplorerPanel, ExplorerScreen
+from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
 from .help import HelpScreen
 from .prompt import InfoBar
 from .scrollbar import install as install_scrollbar
@@ -223,18 +223,27 @@ class EditorScreen(Screen[None]):
         if buf is None:
             return
         if buf.path is None:
+            # 相対パスは、ツリーで最後に見ていたフォルダ（サイドバーとオーバーレイで共有）から数える
+            base = self.explorer_root
 
             def on_name(name: str) -> None:
                 if not name.strip():
                     self.message("Save cancelled")
                     return
-                target = Path(name.strip()).expanduser().resolve()
+                target = Path(name.strip()).expanduser()
+                if not target.is_absolute():
+                    target = base / target
+                target = target.resolve()
                 if target.exists() and target != buf.path:
                     self._confirm_overwrite(buf, target, then)
                     return
                 self._do_save(buf, target, then)
 
-            self.infobar.ask("Filename: ", on_name, on_cancel=lambda: self.message("Save cancelled"))
+            # どこに保存されるかわかるよう、基準のフォルダをプロンプトに出す
+            where = truncate_left(display_path(base).rstrip("/") + "/", 30)
+            self.infobar.ask(
+                f"Filename ({where}): ", on_name, on_cancel=lambda: self.message("Save cancelled")
+            )
             return
         self._do_save(buf, None, then)
 
