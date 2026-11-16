@@ -31,7 +31,7 @@ tsumugi a.txt b.txt  # 複数ファイルをタブで開く
 | Ctrl+W | サイドバーとエディタの間でフォーカスを移動 |
 | Ctrl+T | 新規タブ |
 | Ctrl+PgUp / Ctrl+PgDn | 前 / 次のタブ（タブバーのクリックでも切替） |
-| Alt+, / Alt+. | 前 / 次のタブ（kitty keyboard protocol 対応ターミナルのみ） |
+| Alt+, / Alt+. | 前 / 次のタブ（kitty keyboard protocol 対応ターミナルで `TEXTUAL_DISABLE_KITTY_KEY=0` を付けて起動したときのみ） |
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+C / Ctrl+X | コピー / カット（選択なしなら行単位） |
 | Ctrl+V | ペースト |
@@ -43,6 +43,8 @@ tsumugi a.txt b.txt  # 複数ファイルをタブで開く
 | Ctrl+F | 検索（入力しながらインクリメンタルに移動、Enter で確定） |
 | Ctrl+N / Ctrl+P | 次 / 前を検索 |
 | Ctrl+G | ヘルプ |
+
+kitty keyboard protocol は既定でオフにしている。iTerm2 などでは IME の確定が kitty の形式で届き、Textual が改行として扱ったり、長い文字列だと制御文字がそのまま入力されたりして、日本語が入力できないため。
 
 ### エクスプローラ
 

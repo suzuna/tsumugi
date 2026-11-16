@@ -65,7 +65,10 @@ def _help_text() -> str:
         for key, desc in rows:
             out.append(f"  [$accent]{key:<20}[/] {desc}")
         out.append("")
-    out.append("(*) only in terminals that support the kitty keyboard protocol")
+    out.append(
+        "(*) only with TEXTUAL_DISABLE_KITTY_KEY=0 in terminals that support"
+        " the kitty keyboard protocol"
+    )
     return "\n".join(out).rstrip()
 
 
