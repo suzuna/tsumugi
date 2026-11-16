@@ -5,7 +5,10 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TextIO
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -473,9 +476,31 @@ class TsumugiApp(App[None], inherit_bindings=False):
         return self.clipboard
 
 
+@contextmanager
+def terminal_title(title: str, stream: TextIO) -> Iterator[None]:
+    """ターミナルのタブ / ウィンドウのタイトルを title にし、抜けるときに元へ戻す。
+
+    何もしないと iTerm2 などは前面のプロセス名（Python）をタイトルに出すため。
+    元に戻すのは xterm のタイトルスタック（保存 CSI 22;0 t / 復元 CSI 23;0 t）に
+    対応したターミナルだけで効く。tty でなければ何も書かない。
+    """
+    if not stream.isatty():
+        yield
+        return
+    stream.write("\x1b[22;0t")  # 今のタイトルを保存
+    stream.write(f"\x1b]0;{title}\x07")  # タブ名とウィンドウ名を設定
+    stream.flush()
+    try:
+        yield
+    finally:
+        stream.write("\x1b[23;0t")  # 保存したタイトルに戻す
+        stream.flush()
+
+
 def main() -> None:
     files = [Path(arg) for arg in sys.argv[1:]]
-    TsumugiApp(files, config=load_config()).run()
+    with terminal_title("tsumugi", sys.__stdout__):
+        TsumugiApp(files, config=load_config()).run()
 
 
 if __name__ == "__main__":
