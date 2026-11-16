@@ -228,11 +228,31 @@ class EditorScreen(Screen[None]):
                 if not name.strip():
                     self.message("Save cancelled")
                     return
-                self._do_save(buf, Path(name.strip()).expanduser().resolve(), then)
+                target = Path(name.strip()).expanduser().resolve()
+                if target.exists() and target != buf.path:
+                    self._confirm_overwrite(buf, target, then)
+                    return
+                self._do_save(buf, target, then)
 
             self.infobar.ask("Filename: ", on_name, on_cancel=lambda: self.message("Save cancelled"))
             return
         self._do_save(buf, None, then)
+
+    def _confirm_overwrite(self, buf: Buffer, target: Path, then=None) -> None:
+        """名前を聞いて保存するとき、もうあるファイルなら上書きしていいか聞く（micro と同じ）。"""
+
+        def on_answer(answer: str) -> None:
+            if answer == "y":
+                self._do_save(buf, target, then)
+            else:
+                self.message("Save cancelled")
+
+        self.infobar.ask(
+            f"{target.name} already exists, overwrite? (y,n,esc) ",
+            on_answer,
+            choices={"y", "n"},
+            on_cancel=lambda: self.message("Save cancelled"),
+        )
 
     def _do_save(self, buf: Buffer, path: Path | None, then=None) -> None:
         target = path if path is not None else buf.path
