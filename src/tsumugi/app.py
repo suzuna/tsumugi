@@ -235,12 +235,25 @@ class EditorScreen(Screen[None]):
         self._do_save(buf, None, then)
 
     def _do_save(self, buf: Buffer, path: Path | None, then=None) -> None:
+        target = path if path is not None else buf.path
+        created = False
+        if target is not None and not target.parent.exists():
+            # micro の mkparents と同じ: 設定が on のときだけ足りないフォルダを作る
+            if not self._config.mkparents:
+                self.message("Parent dirs don't exist, enable 'mkparents' in config")
+                return
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                self.message(f"Error creating {target.parent}: {e.strerror}")
+                return
+            created = True
         try:
             saved = buf.save(path)
         except OSError as e:
             self.message(f"Error saving: {e.strerror}")
             return
-        self.message(f"Saved {saved}")
+        self.message(f"Saved {saved}" + (" (created parent dirs)" if created else ""))
         self.refresh_bars()
         if then is not None:
             self.call_later(then)

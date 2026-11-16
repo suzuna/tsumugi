@@ -6,6 +6,7 @@
     tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
     soft_wrap = true            # 長い行を右端で折り返す（既定は false）
     css = "style.tcss"          # 見た目のカスタム CSS（相対パスは設定ファイルのディレクトリ基準）
+    mkparents = true            # 保存先のフォルダがなければ作る（既定は false、micro と同じ）
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ class Config:
     tree_sort: str = "asc"
     soft_wrap: bool = False
     css: Path | None = None
+    mkparents: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -48,6 +50,7 @@ def load_config(path: Path | None = None) -> Config:
     _read_tree_sort(data, path, config)
     _read_soft_wrap(data, path, config)
     _read_css(data, path, config)
+    _read_mkparents(data, path, config)
     return config
 
 
@@ -115,3 +118,13 @@ def _read_css(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f"{path}: css {css} is not a file, ignored")
         return
     config.css = css_path
+
+
+def _read_mkparents(data: dict, path: Path, config: Config) -> None:
+    value = data.get("mkparents")
+    if value is None:
+        return
+    if not isinstance(value, bool):
+        config.warnings.append(f"{path}: mkparents must be true or false")
+        return
+    config.mkparents = value

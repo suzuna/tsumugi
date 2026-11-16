@@ -172,3 +172,22 @@ def test_css_not_string_warns(xdg: Path) -> None:
     config = load_config()
     assert config.css is None
     assert config.warnings
+
+
+def test_mkparents(xdg: Path) -> None:
+    xdg.write_text("mkparents = true\n")
+    config = load_config()
+    assert config.mkparents is True
+    assert config.warnings == []
+
+
+def test_mkparents_defaults_to_false(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().mkparents is False
+
+
+def test_mkparents_invalid_warns(xdg: Path) -> None:
+    xdg.write_text('mkparents = "yes"\n')
+    config = load_config()
+    assert config.mkparents is False
+    assert config.warnings

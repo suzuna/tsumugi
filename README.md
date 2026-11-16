@@ -93,6 +93,9 @@ soft_wrap = true
 
 # 見た目のカスタム CSS（Textual CSS）
 css = "style.tcss"
+
+# 保存先のフォルダがなければ作る（既定は false。micro の mkparents と同じ）
+mkparents = true
 ```
 
 - `sidebar = true` のとき、ファイルを指定して起動したらエディタに、ファイルなしで起動したらツリーにフォーカスする
