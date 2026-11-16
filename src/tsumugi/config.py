@@ -3,6 +3,7 @@
 例:
     explorer_root = "~/repos"   # ツリーの起点（既定は ~）
     sidebar = true              # 起動時にサイドバーを開く（既定は false）
+    tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 class Config:
     explorer_root: Path = field(default_factory=Path.home)
     sidebar: bool = False
+    tree_sort: str = "asc"
     warnings: list[str] = field(default_factory=list)
 
 
@@ -39,6 +41,7 @@ def load_config(path: Path | None = None) -> Config:
     # 項目ごとに独立して読む（ある項目が不正でも、ほかの項目は効く）
     _read_explorer_root(data, path, config)
     _read_sidebar(data, path, config)
+    _read_tree_sort(data, path, config)
     return config
 
 
@@ -68,3 +71,13 @@ def _read_sidebar(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f"{path}: sidebar must be true or false")
         return
     config.sidebar = sidebar
+
+
+def _read_tree_sort(data: dict, path: Path, config: Config) -> None:
+    order = data.get("tree_sort")
+    if order is None:
+        return
+    if order not in ("asc", "desc"):
+        config.warnings.append(f'{path}: tree_sort must be "asc" or "desc"')
+        return
+    config.tree_sort = order

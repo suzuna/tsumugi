@@ -233,3 +233,19 @@ async def test_sort_order_shared_with_overlay(sortable: Path) -> None:
         await pilot.pause(0.3)
         side = app.editor.sidebar.query_one(FileTree)
         assert _labels(side)[0] == "+ dir1/"
+
+
+async def test_tree_sort_desc_at_startup(sortable: Path) -> None:
+    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=sortable, tree_sort="desc"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        assert _labels(tree) == ["+ dir2/", "+ dir1/", "  2023-c.md", "  2022-b.md", "  2021-a.md"]
+        await pilot.press("ctrl+w", "ctrl+b")
+        await pilot.pause(0.3)
+        assert _labels(app.screen.query_one(FileTree))[0] == "+ dir2/"
+        await pilot.press("escape", "ctrl+w", "s")
+        await pilot.pause(0.3)
+        assert _labels(tree)[0] == "+ dir1/"

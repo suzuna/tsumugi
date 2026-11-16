@@ -84,6 +84,9 @@ explorer_root = "~/repos"
 
 # 起動時にサイドバーのツリーを開く（既定は false）
 sidebar = true
+
+# ツリーの名前順 "asc"（昇順）/ "desc"（降順）。既定は "asc"。起動後は s で切り替えられる
+tree_sort = "desc"
 ```
 
 - `sidebar = true` のとき、ファイルを指定して起動したらエディタに、ファイルなしで起動したらツリーにフォーカスする

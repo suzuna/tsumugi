@@ -85,7 +85,7 @@ class EditorScreen(Screen[None]):
         self.last_search = ""
         self.explorer_root = config.explorer_root
         self.explorer_show_hidden = False
-        self.explorer_sort_desc = False
+        self.explorer_sort_desc = config.tree_sort == "desc"
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):

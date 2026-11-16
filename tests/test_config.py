@@ -100,3 +100,24 @@ def test_sidebar_read_even_if_root_invalid(xdg: Path, tmp_path: Path) -> None:
     assert config.explorer_root == Path.home()
     assert config.sidebar is True
     assert len(config.warnings) == 1
+
+
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_tree_sort(xdg: Path, order: str) -> None:
+    xdg.write_text(f'tree_sort = "{order}"\n')
+    config = load_config()
+    assert config.tree_sort == order
+    assert config.warnings == []
+
+
+def test_tree_sort_defaults_to_asc(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().tree_sort == "asc"
+
+
+@pytest.mark.parametrize("value", ['"descending"', "true", "1"])
+def test_tree_sort_invalid_warns(xdg: Path, value: str) -> None:
+    xdg.write_text(f"tree_sort = {value}\n")
+    config = load_config()
+    assert config.tree_sort == "asc"
+    assert config.warnings
