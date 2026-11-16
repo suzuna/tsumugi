@@ -121,3 +121,22 @@ def test_tree_sort_invalid_warns(xdg: Path, value: str) -> None:
     config = load_config()
     assert config.tree_sort == "asc"
     assert config.warnings
+
+
+def test_soft_wrap(xdg: Path) -> None:
+    xdg.write_text("soft_wrap = true\n")
+    config = load_config()
+    assert config.soft_wrap is True
+    assert config.warnings == []
+
+
+def test_soft_wrap_defaults_to_false(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().soft_wrap is False
+
+
+def test_soft_wrap_invalid_warns(xdg: Path) -> None:
+    xdg.write_text('soft_wrap = "yes"\n')
+    config = load_config()
+    assert config.soft_wrap is False
+    assert config.warnings

@@ -242,3 +242,50 @@ async def test_line_numbers_have_left_space(tmp_path: Path) -> None:
         # クリックした位置がずれない（padding を考慮）
         await pilot.click(buf, offset=(1 + buf.gutter_width + 3, 0))
         assert buf.cursor_location == (0, 3)
+
+
+def _row_text(buf: Buffer, y: int) -> str:
+    return "".join(seg.text for seg in buf.render_line(y))
+
+
+async def test_soft_wrap_numbers_only_first_row(tmp_path: Path) -> None:
+    from tsumugi.config import Config
+
+    f = tmp_path / "long.txt"
+    f.write_text("x" * 100 + "\nshort\n")
+    app = TsumugiApp([f], system_clipboard=False, config=Config(soft_wrap=True))
+    async with app.run_test(size=(40, 12)) as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        assert buf.soft_wrap
+        # 論理行は3行（最後の空行を含む）、表示行はそれより多い
+        assert buf.document.line_count == 3
+        assert buf.wrapped_document.height > 3
+        sections = len(buf.wrapped_document.get_sections(0))
+        assert sections >= 3
+        gutter = buf.gutter_width
+        # 1行目の最初の表示行だけに番号、続きの行は空欄
+        assert _row_text(buf, 0)[:gutter].strip() == "1"
+        for y in range(1, sections):
+            assert _row_text(buf, y)[:gutter].strip() == ""
+        # 次の論理行には 2
+        assert _row_text(buf, sections)[:gutter].strip() == "2"
+        assert _row_text(buf, sections)[gutter:].startswith("short")
+        # 折り返すので横スクロールバーは出ない
+        assert not buf.show_horizontal_scrollbar
+        # 新しいタブも折り返す
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        assert editor(app).current.soft_wrap
+
+
+async def test_no_soft_wrap_by_default(tmp_path: Path) -> None:
+    f = tmp_path / "long.txt"
+    f.write_text("x" * 100 + "\n")
+    app = make_app(f)
+    async with app.run_test(size=(40, 12)) as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        assert not buf.soft_wrap
+        assert buf.wrapped_document.height == buf.document.line_count
+        assert buf.show_horizontal_scrollbar

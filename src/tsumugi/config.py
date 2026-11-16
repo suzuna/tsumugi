@@ -4,6 +4,7 @@
     explorer_root = "~/repos"   # ツリーの起点（既定は ~）
     sidebar = true              # 起動時にサイドバーを開く（既定は false）
     tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
+    soft_wrap = true            # 長い行を右端で折り返す（既定は false）
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ class Config:
     explorer_root: Path = field(default_factory=Path.home)
     sidebar: bool = False
     tree_sort: str = "asc"
+    soft_wrap: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -42,6 +44,7 @@ def load_config(path: Path | None = None) -> Config:
     _read_explorer_root(data, path, config)
     _read_sidebar(data, path, config)
     _read_tree_sort(data, path, config)
+    _read_soft_wrap(data, path, config)
     return config
 
 
@@ -81,3 +84,13 @@ def _read_tree_sort(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f'{path}: tree_sort must be "asc" or "desc"')
         return
     config.tree_sort = order
+
+
+def _read_soft_wrap(data: dict, path: Path, config: Config) -> None:
+    wrap = data.get("soft_wrap")
+    if wrap is None:
+        return
+    if not isinstance(wrap, bool):
+        config.warnings.append(f"{path}: soft_wrap must be true or false")
+        return
+    config.soft_wrap = wrap

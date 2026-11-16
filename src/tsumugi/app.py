@@ -101,7 +101,7 @@ class EditorScreen(Screen[None]):
         for path in self._initial_files:
             await self.open_path(path)
         if not self.buffers:
-            await self.add_buffer(Buffer())
+            await self.add_buffer(self._new_buffer())
         if self._config.sidebar:
             await self.action_toggle_sidebar()
             # ファイル指定で起動したらすぐ書けるようにエディタへ。なしならツリーから選ぶ
@@ -132,6 +132,9 @@ class EditorScreen(Screen[None]):
         self.infobar.show_message(text)
 
     # ---- バッファ・タブ管理 ----
+
+    def _new_buffer(self, text: str = "", path: Path | None = None) -> Buffer:
+        return Buffer(text, path, soft_wrap=self._config.soft_wrap)
 
     async def add_buffer(self, buf: Buffer, focus: bool = True) -> None:
         self.buffers.append(buf)
@@ -178,7 +181,7 @@ class EditorScreen(Screen[None]):
             text = ""  # micro と同じく、存在しないファイルは新規として開く
 
         cur = self.current
-        new = Buffer(text, path)
+        new = self._new_buffer(text, path)
         if cur is not None and cur.is_pristine_empty:
             # 空の無題バッファは置き換える
             index = self.buffers.index(cur)
@@ -261,7 +264,7 @@ class EditorScreen(Screen[None]):
         )
 
     async def action_new_tab(self) -> None:
-        await self.add_buffer(Buffer())
+        await self.add_buffer(self._new_buffer())
 
     def _cycle(self, step: int) -> None:
         buf = self.current

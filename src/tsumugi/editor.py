@@ -33,11 +33,13 @@ class Buffer(TextArea):
         Binding("alt+down", "move_line(1)", "Move line down", show=False),
     ]
 
-    def __init__(self, text: str = "", path: Path | None = None) -> None:
+    def __init__(
+        self, text: str = "", path: Path | None = None, soft_wrap: bool = False
+    ) -> None:
         super().__init__(
             text,
             id=f"buf-{next(_ids)}",
-            soft_wrap=False,
+            soft_wrap=soft_wrap,
             tab_behavior="indent",
             show_line_numbers=True,
             highlight_cursor_line=True,
