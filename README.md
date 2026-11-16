@@ -153,3 +153,10 @@ EditorScreen #sidebar {
 ```sh
 uv run pytest
 ```
+
+コミット前に ruff（import 順の整列と formatter）を通す。設定は pyproject.toml の `[tool.ruff]`。
+
+```sh
+uv run ruff check --fix .
+uv run ruff format .
+```
