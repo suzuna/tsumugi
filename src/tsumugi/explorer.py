@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+from rich.cells import cell_len
 from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
@@ -12,7 +13,8 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
-from textual.widgets import DirectoryTree, Label
+from textual.widget import Widget
+from textual.widgets import DirectoryTree
 from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
 
@@ -102,12 +104,60 @@ def _root_label(root: Path) -> str:
     return "~" if str(rel) == "." else f"~/{rel}"
 
 
+ELLIPSIS = "…"
+
+
+def truncate_left(text: str, width: int) -> str:
+    """表示幅 width に収まるよう前を削り、先頭に … を付ける。収まればそのまま。"""
+    if cell_len(text) <= width:
+        return text
+    if width <= 0:
+        return ""
+    if width == 1:
+        return ELLIPSIS
+    budget = width - cell_len(ELLIPSIS)
+    kept: list[str] = []
+    used = 0
+    for ch in reversed(text):
+        w = cell_len(ch)
+        if used + w > budget:
+            break
+        kept.append(ch)
+        used += w
+    return ELLIPSIS + "".join(reversed(kept))
+
+
+class RootPath(Widget):
+    """ツリーの起点のパス。幅に収まらなければ前を省略して1行で出す。"""
+
+    DEFAULT_CSS = """
+    RootPath {
+        height: 1;
+        width: 1fr;
+    }
+    """
+
+    def __init__(self, text: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._text = text
+
+    @property
+    def text(self) -> str:
+        return self._text
+
+    def set_path(self, text: str) -> None:
+        self._text = text
+        self.refresh()
+
+    def render(self) -> Text:
+        return Text(truncate_left(self._text, self.size.width), no_wrap=True)
+
+
 class ExplorerPanel(Vertical):
     """ルートのパス表示とディレクトリツリー。Backspace で親へ、. で隠しファイル切替。"""
 
     DEFAULT_CSS = """
-    ExplorerPanel > .root-path {
-        width: 1fr;
+    ExplorerPanel > RootPath {
         color: $text-muted;
         text-style: bold;
     }
@@ -135,7 +185,7 @@ class ExplorerPanel(Vertical):
         self.show_hidden = show_hidden
 
     def compose(self) -> ComposeResult:
-        yield Label(_root_label(self.root), classes="root-path")
+        yield RootPath(_root_label(self.root))
         yield FileTree(self.root, self.show_hidden)
 
     @property
@@ -145,7 +195,7 @@ class ExplorerPanel(Vertical):
     def set_root(self, root: Path) -> None:
         self.root = root
         self.tree.path = root
-        self.query_one(".root-path", Label).update(_root_label(root))
+        self.query_one(RootPath).set_path(_root_label(root))
         self.post_message(self.Changed(self))
 
     def action_parent(self) -> None:

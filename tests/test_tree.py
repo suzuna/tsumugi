@@ -111,3 +111,57 @@ async def test_overlay_uses_same_tree(root: Path) -> None:
         await pilot.press("right")
         await pilot.pause(0.3)
         assert tree.cursor_node.is_expanded
+
+
+def test_truncate_left_keeps_short_text() -> None:
+    from tsumugi.explorer import truncate_left
+
+    assert truncate_left("~/repos", 30) == "~/repos"
+    assert truncate_left("~/repos", 7) == "~/repos"
+
+
+def test_truncate_left_keeps_tail() -> None:
+    from rich.cells import cell_len
+
+    from tsumugi.explorer import truncate_left
+
+    path = "~/repos/blog-suzunano/content/posts"
+    out = truncate_left(path, 20)
+    assert out.startswith("…")
+    assert out.endswith("content/posts")
+    assert cell_len(out) == 20
+
+
+def test_truncate_left_wide_chars() -> None:
+    from rich.cells import cell_len
+
+    from tsumugi.explorer import truncate_left
+
+    path = "~/ドキュメント/ブログ/記事の下書き"
+    for width in range(0, 40):
+        out = truncate_left(path, width)
+        assert cell_len(out) <= width
+    assert truncate_left(path, 1) == "…"
+    assert truncate_left(path, 0) == ""
+
+
+async def test_sidebar_root_path_is_one_line(tmp_path: Path) -> None:
+    from tsumugi.explorer import RootPath
+
+    deep = tmp_path / "very-long-directory-name" / "another-long-directory" / "posts"
+    deep.mkdir(parents=True)
+    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=deep))
+    async with app.run_test(size=(100, 20)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        label = app.editor.sidebar.query_one(RootPath)
+        assert label.size.height == 1
+        shown = label.render().plain
+        assert shown.startswith("…")
+        assert shown.endswith("another-long-directory/posts")
+        assert len(shown) <= label.size.width
+        # Backspace で親に移ると表示も変わる
+        await pilot.press("backspace")
+        await pilot.pause()
+        assert label.render().plain.endswith("another-long-directory")
