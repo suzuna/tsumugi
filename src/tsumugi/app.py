@@ -100,6 +100,11 @@ class EditorScreen(Screen[None]):
             await self.open_path(path)
         if not self.buffers:
             await self.add_buffer(Buffer())
+        if self._config.sidebar:
+            await self.action_toggle_sidebar()
+            # ファイル指定で起動したらすぐ書けるようにエディタへ。なしならツリーから選ぶ
+            if self._initial_files:
+                self.app.focus_editor()
         if self._config.warnings:
             self.message(self._config.warnings[0])
 

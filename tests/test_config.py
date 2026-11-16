@@ -73,3 +73,30 @@ async def test_config_warning_is_shown(tmp_path: Path) -> None:
         await pilot.pause()
         msg = app.editor.infobar.query_one("#message")
         assert "something wrong" in str(msg.render())
+
+
+def test_sidebar_true(xdg: Path) -> None:
+    xdg.write_text("sidebar = true\n")
+    config = load_config()
+    assert config.sidebar is True
+    assert config.warnings == []
+
+
+def test_sidebar_defaults_to_false(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().sidebar is False
+
+
+def test_sidebar_not_bool_warns(xdg: Path) -> None:
+    xdg.write_text('sidebar = "yes"\n')
+    config = load_config()
+    assert config.sidebar is False
+    assert config.warnings
+
+
+def test_sidebar_read_even_if_root_invalid(xdg: Path, tmp_path: Path) -> None:
+    xdg.write_text(f'explorer_root = "{tmp_path / "nope"}"\nsidebar = true\n')
+    config = load_config()
+    assert config.explorer_root == Path.home()
+    assert config.sidebar is True
+    assert len(config.warnings) == 1

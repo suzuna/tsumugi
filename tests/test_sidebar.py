@@ -120,3 +120,30 @@ async def test_sidebar_disabled_while_prompting(tmp_path: Path) -> None:
         await pilot.press("ctrl+f", "ctrl+e")
         await pilot.pause()
         assert not app.editor.sidebar_visible
+
+
+async def test_sidebar_open_at_startup_focuses_tree(tmp_path: Path) -> None:
+    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.editor.sidebar_visible
+        assert app.focused is _tree(app)
+        assert _tree(app).path == tmp_path
+
+
+async def test_sidebar_open_at_startup_with_file_focuses_editor(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("a")
+    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path, sidebar=True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.editor.sidebar_visible
+        assert isinstance(app.focused, Buffer)
+        assert app.editor.current.path == f.resolve()
+
+
+async def test_sidebar_closed_at_startup_by_default(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert not app.editor.sidebar_visible
