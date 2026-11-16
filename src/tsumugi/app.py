@@ -18,6 +18,7 @@ from .editor import Buffer
 from .explorer import ExplorerPanel, ExplorerScreen
 from .help import HelpScreen
 from .prompt import InfoBar
+from .scrollbar import install as install_scrollbar
 from .statusbar import StatusBar
 from .tabs import TabBar
 
@@ -394,6 +395,13 @@ class TsumugiApp(App[None], inherit_bindings=False):
     ENABLE_COMMAND_PALETTE = False
     # Textual 既定の Ctrl+Q（即終了）と Ctrl+C（終了ヘルプ）を外す
     BINDINGS = []
+    # スクロールバーは幅1マス（つまみの描き方は scrollbar.py）
+    CSS = """
+    * {
+        scrollbar-size-vertical: 1;
+        scrollbar-size-horizontal: 1;
+    }
+    """
 
     def __init__(
         self,
@@ -401,6 +409,7 @@ class TsumugiApp(App[None], inherit_bindings=False):
         system_clipboard: bool = True,
         config: Config | None = None,
     ) -> None:
+        install_scrollbar()
         super().__init__()
         self._files = files or []
         self.system_clipboard = system_clipboard
