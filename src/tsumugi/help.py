@@ -47,6 +47,8 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         "Explorer",
         [
             ("Enter", "Open file / expand directory"),
+            ("Right", "Expand directory"),
+            ("Left", "Collapse directory / go to parent"),
             ("Backspace", "Go to parent directory"),
             (".", "Toggle hidden files"),
             ("Esc", "Close"),

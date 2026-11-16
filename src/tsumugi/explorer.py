@@ -27,6 +27,11 @@ class FileTree(DirectoryTree):
     罫線とルートノードは出さず、階層ごとに空白2つで字下げする。
     """
 
+    BINDINGS = [
+        Binding("right", "expand_node", "Expand", show=False),
+        Binding("left", "collapse_or_parent", "Collapse", show=False),
+    ]
+
     def __init__(self, path: Path, show_hidden: bool = False) -> None:
         super().__init__(path, classes="file-tree")
         self.show_hidden = show_hidden
@@ -71,6 +76,22 @@ class FileTree(DirectoryTree):
         if label.plain.startswith("."):
             label.stylize_before(self.get_component_rich_style("directory-tree--hidden", partial=True))
         return Text.assemble(prefix, label)
+
+    def action_expand_node(self) -> None:
+        node = self.cursor_node
+        if node is not None and node.allow_expand and not node.is_expanded:
+            node.expand()
+
+    def action_collapse_or_parent(self) -> None:
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and node.is_expanded:
+            node.collapse()
+            return
+        parent = node.parent
+        if parent is not None and parent is not self.root:
+            self.move_cursor(parent)
 
 
 def _root_label(root: Path) -> str:
