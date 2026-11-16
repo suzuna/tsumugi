@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from rich.cells import cell_len
 from rich.style import Style
 from rich.text import Text
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -17,9 +18,16 @@ from textual.widget import Widget
 from textual.widgets import DirectoryTree
 from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
+from textual.worker import get_current_worker
 
 # Textual の Tree と同じ。この meta が付いた部分をクリックすると開閉する
 TOGGLE_STYLE = Style.from_meta({"toggle": True})
+
+
+def sort_paths(paths: list[Path], desc: bool, is_dir: Callable[[Path], bool]) -> list[Path]:
+    """ディレクトリを先にして、それぞれの中を名前（大文字小文字を無視）で並べる。"""
+    paths = sorted(paths, key=lambda p: p.name.lower(), reverse=desc)
+    return sorted(paths, key=lambda p: not is_dir(p))  # 安定ソートなので名前順は保たれる
 
 
 class FileTree(DirectoryTree):
@@ -34,9 +42,10 @@ class FileTree(DirectoryTree):
         Binding("left", "collapse_or_parent", "Collapse", show=False),
     ]
 
-    def __init__(self, path: Path, show_hidden: bool = False) -> None:
+    def __init__(self, path: Path, show_hidden: bool = False, sort_desc: bool = False) -> None:
         super().__init__(path, classes="file-tree")
         self.show_hidden = show_hidden
+        self.sort_desc = sort_desc
         self.show_root = False
         self.show_guides = False
         self.guide_depth = 2
@@ -46,11 +55,31 @@ class FileTree(DirectoryTree):
             return paths
         return [p for p in paths if not p.name.startswith(".")]
 
+    @work(thread=True, exit_on_error=False)
+    def _load_directory(self, node: TreeNode[DirEntry]) -> list[Path]:
+        # DirectoryTree._load_directory と同じく「ディレクトリが先」で、
+        # それぞれの中の名前順を sort_desc で昇順 / 降順に切り替える
+        assert node.data is not None
+        path = node.data.path.expanduser().resolve()
+        paths = list(self.filter_paths(self._directory_content(path, get_current_worker())))
+        return sort_paths(paths, self.sort_desc, self._safe_is_dir)
+
     def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
         super()._populate_node(node, content)
         # ルートを隠すと最初はカーソルがどの行にもない。ルートの読み込み後に先頭行へ置く
         if node is self.root and self.cursor_line < 0:
             self.call_after_refresh(self._cursor_to_first_line)
+
+    def select_path(self, path: Path) -> bool:
+        """読み込み済みのノードから path を探してカーソルを移す。見つからなければ False。"""
+        stack = list(self.root.children)
+        while stack:
+            node = stack.pop()
+            if node.data is not None and node.data.path == path:
+                self.move_cursor(node)
+                return True
+            stack.extend(node.children)
+        return False
 
     def _cursor_to_first_line(self) -> None:
         if self.cursor_line < 0 and self.last_line >= 0:
@@ -170,23 +199,27 @@ class ExplorerPanel(Vertical):
     BINDINGS = [
         Binding("backspace", "parent", "Parent dir", show=False),
         Binding("full_stop", "toggle_hidden", "Hidden files", show=False),
+        Binding("s", "toggle_sort", "Sort order", show=False),
     ]
 
     class Changed(Message):
-        """ルートや隠しファイル表示が変わった。"""
+        """ルート・隠しファイル表示・並び順が変わった。"""
 
         def __init__(self, panel: ExplorerPanel) -> None:
             super().__init__()
             self.panel = panel
 
-    def __init__(self, root: Path, show_hidden: bool = False, **kwargs) -> None:
+    def __init__(
+        self, root: Path, show_hidden: bool = False, sort_desc: bool = False, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.root = root
         self.show_hidden = show_hidden
+        self.sort_desc = sort_desc
 
     def compose(self) -> ComposeResult:
         yield RootPath(_root_label(self.root))
-        yield FileTree(self.root, self.show_hidden)
+        yield FileTree(self.root, self.show_hidden, self.sort_desc)
 
     @property
     def tree(self) -> FileTree:
@@ -207,6 +240,17 @@ class ExplorerPanel(Vertical):
         tree = self.tree
         tree.show_hidden = self.show_hidden = not self.show_hidden
         tree.reload()
+        self.post_message(self.Changed(self))
+
+    async def action_toggle_sort(self) -> None:
+        tree = self.tree
+        node = tree.cursor_node
+        current = node.data.path if node is not None and node.data is not None else None
+        tree.sort_desc = self.sort_desc = not self.sort_desc
+        await tree.reload()
+        # 並びが変わっても、カーソルは同じファイル / ディレクトリについていく
+        if current is not None:
+            tree.select_path(current)
         self.post_message(self.Changed(self))
 
 
@@ -233,15 +277,16 @@ class ExplorerScreen(ModalScreen[Path | None]):
         Binding("escape,ctrl+b,ctrl+q", "close", "Close", show=False),
     ]
 
-    def __init__(self, root: Path, show_hidden: bool = False) -> None:
+    def __init__(self, root: Path, show_hidden: bool = False, sort_desc: bool = False) -> None:
         super().__init__()
         self._initial_root = root
         self._initial_show_hidden = show_hidden
+        self._initial_sort_desc = sort_desc
 
     def compose(self) -> ComposeResult:
-        panel = ExplorerPanel(self._initial_root, self._initial_show_hidden)
+        panel = ExplorerPanel(self._initial_root, self._initial_show_hidden, self._initial_sort_desc)
         panel.border_title = "Explorer"
-        panel.border_subtitle = "Enter: open  BS: parent  .: hidden  Esc: close"
+        panel.border_subtitle = "Enter: open  BS: parent  .: hidden  s: sort  Esc: close"
         yield panel
 
     def on_mount(self) -> None:
@@ -258,6 +303,10 @@ class ExplorerScreen(ModalScreen[Path | None]):
     @property
     def show_hidden(self) -> bool:
         return self.panel.show_hidden
+
+    @property
+    def sort_desc(self) -> bool:
+        return self.panel.sort_desc
 
     def action_close(self) -> None:
         self.dismiss(None)

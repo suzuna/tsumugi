@@ -165,3 +165,71 @@ async def test_sidebar_root_path_is_one_line(tmp_path: Path) -> None:
         await pilot.press("backspace")
         await pilot.pause()
         assert label.render().plain.endswith("another-long-directory")
+
+
+def test_sort_paths_dirs_first_and_desc(tmp_path: Path) -> None:
+    from tsumugi.explorer import sort_paths
+
+    names = ["b.txt", "A.txt", "c.txt"]
+    dirs = ["y", "X"]
+    paths = [tmp_path / n for n in names + dirs]
+    is_dir = lambda p: p.name in dirs  # noqa: E731
+    asc = [p.name for p in sort_paths(paths, False, is_dir)]
+    desc = [p.name for p in sort_paths(paths, True, is_dir)]
+    assert asc == ["X", "y", "A.txt", "b.txt", "c.txt"]
+    assert desc == ["y", "X", "c.txt", "b.txt", "A.txt"]
+
+
+@pytest.fixture
+def sortable(tmp_path: Path) -> Path:
+    for name in ["2021-a.md", "2023-c.md", "2022-b.md"]:
+        (tmp_path / name).write_text("x")
+    (tmp_path / "dir1").mkdir()
+    (tmp_path / "dir2").mkdir()
+    (tmp_path / "dir2" / "1.md").write_text("x")
+    (tmp_path / "dir2" / "2.md").write_text("x")
+    return tmp_path
+
+
+async def test_toggle_sort_in_sidebar(sortable: Path) -> None:
+    app = await _open_sidebar(sortable)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        assert _labels(tree) == ["+ dir1/", "+ dir2/", "  2021-a.md", "  2022-b.md", "  2023-c.md"]
+        await pilot.press("s")
+        await pilot.pause(0.3)
+        assert _labels(tree) == ["+ dir2/", "+ dir1/", "  2023-c.md", "  2022-b.md", "  2021-a.md"]
+        assert app.editor.explorer_sort_desc
+        # カーソルは並べ替え前と同じ dir1 についていく（2行目に移っている）
+        assert tree.cursor_node.data.path == sortable / "dir1"
+        assert tree.cursor_line == 1
+        # 開いたサブディレクトリの中も降順
+        await pilot.press("up", "right")
+        await pilot.pause(0.3)
+        assert _labels(tree)[:3] == ["- dir2/", "  2.md", "  1.md"]  # 字下げは Tree 側で付く
+        await pilot.press("s")
+        await pilot.pause(0.3)
+        assert _labels(tree)[0] == "+ dir1/"
+        assert not app.editor.explorer_sort_desc
+
+
+async def test_sort_order_shared_with_overlay(sortable: Path) -> None:
+    app = await _open_sidebar(sortable)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        await pilot.press("s", "ctrl+w", "ctrl+b")
+        await pilot.pause(0.3)
+        tree = app.screen.query_one(FileTree)
+        assert _labels(tree)[0] == "+ dir2/"
+        # オーバーレイで戻したら、サイドバーを出し直したときにも反映
+        await pilot.press("s")
+        await pilot.pause(0.3)
+        await pilot.press("escape", "ctrl+e", "ctrl+e")
+        await pilot.pause(0.3)
+        side = app.editor.sidebar.query_one(FileTree)
+        assert _labels(side)[0] == "+ dir1/"

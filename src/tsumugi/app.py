@@ -84,6 +84,7 @@ class EditorScreen(Screen[None]):
         self.last_search = ""
         self.explorer_root = config.explorer_root
         self.explorer_show_hidden = False
+        self.explorer_sort_desc = False
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
@@ -275,11 +276,14 @@ class EditorScreen(Screen[None]):
         self._cycle(1)
 
     def action_explorer(self) -> None:
-        screen = ExplorerScreen(self.explorer_root, self.explorer_show_hidden)
+        screen = ExplorerScreen(
+            self.explorer_root, self.explorer_show_hidden, self.explorer_sort_desc
+        )
 
         async def on_close(path: Path | None) -> None:
             self.explorer_root = screen.root
             self.explorer_show_hidden = screen.show_hidden
+            self.explorer_sort_desc = screen.sort_desc
             if path is not None:
                 await self.open_path(path)
             else:
@@ -309,7 +313,9 @@ class EditorScreen(Screen[None]):
             return
         panel = self._sidebar_panel()
         if panel is None:
-            panel = ExplorerPanel(self.explorer_root, self.explorer_show_hidden)
+            panel = ExplorerPanel(
+                self.explorer_root, self.explorer_show_hidden, self.explorer_sort_desc
+            )
             await sidebar.mount(panel)
         else:
             # 隠している間にオーバーレイで移動していたら、そこに合わせる
@@ -317,6 +323,8 @@ class EditorScreen(Screen[None]):
                 panel.set_root(self.explorer_root)
             if panel.show_hidden != self.explorer_show_hidden:
                 panel.action_toggle_hidden()
+            if panel.sort_desc != self.explorer_sort_desc:
+                await panel.action_toggle_sort()
         sidebar.add_class("-visible")
         panel.tree.focus()
 
@@ -335,6 +343,7 @@ class EditorScreen(Screen[None]):
         # サイドバーで移動・切替したら、オーバーレイの次回の起点にも反映する
         self.explorer_root = event.panel.root
         self.explorer_show_hidden = event.panel.show_hidden
+        self.explorer_sort_desc = event.panel.sort_desc
 
     async def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         event.stop()
