@@ -224,3 +224,21 @@ async def test_status_bar_hides_tabbar_for_single_buffer() -> None:
         await pilot.pause()
         assert not editor(app).query_one(TabBar).display
         assert editor(app).query_one(InfoBar)
+
+
+async def test_line_numbers_have_left_space(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("hello\nworld\n")
+    app = make_app(f)
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        assert buf.styles.padding.left == 1
+        # 行番号を含む中身は、ウィジェットの左端から1マス右から始まる
+        assert buf.content_region.x - buf.region.x == 1
+        # 中身の1行目は行番号から始まる
+        text = "".join(seg.text for seg in buf.render_line(0))
+        assert text.startswith("1 ")
+        # クリックした位置がずれない（padding を考慮）
+        await pilot.click(buf, offset=(1 + buf.gutter_width + 3, 0))
+        assert buf.cursor_location == (0, 3)

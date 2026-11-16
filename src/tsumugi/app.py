@@ -53,7 +53,8 @@ class EditorScreen(Screen[None]):
     EditorScreen Buffer {
         height: 1fr;
         border: none;
-        padding: 0;
+        /* 行番号が左端やサイドバーの区切り線にくっつかないよう左に1マス空ける */
+        padding: 0 0 0 1;
         background: $background;
     }
     EditorScreen Buffer:focus {
