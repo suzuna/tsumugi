@@ -13,6 +13,7 @@ from typing import TextIO
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.screen import Screen
 from textual.widgets import ContentSwitcher, DirectoryTree, TextArea
 
@@ -30,6 +31,19 @@ _ALLOWED_WHILE_PROMPTING = {"find_next", "find_prev"}
 
 # 開いているファイルがディスク上で変わっていないか見る間隔（秒）
 DISK_CHECK_INTERVAL = 0.5
+
+
+class AfterInput(Message):
+    """先に届いたキーを処理し終えてから callback を実行するためのメッセージ。
+
+    フォーカス中のウィジェットに積むと、先に積まれたキーと同じ道（ウィジェット → 親 →
+    … → Screen → App）をたどって App に届く。キーのバインディング（矢印・Backspace など）は
+    App まで上がってから実行されるので、App で受け取れば必ずそのあとになる。
+    """
+
+    def __init__(self, callback) -> None:
+        super().__init__()
+        self.callback = callback
 
 
 class EditorScreen(Screen[None]):
@@ -236,7 +250,23 @@ class EditorScreen(Screen[None]):
 
     # ---- アクション ----
 
-    def action_save(self, then=None) -> None:
+    def _after_pending_input(self, callback) -> None:
+        """フォーカス中のウィジェットに先に届いたキーを処理してから callback を実行する。
+
+        priority のバインディングはキーが届いた時点ですぐ動くが、ふつうのキーは
+        フォーカス中のウィジェットのキューに積まれてあとで処理される。文字と Ctrl+S が
+        一度に届いたとき、文字が入る前に保存しないよう、キーと同じ道で後ろに回す。
+        """
+        target = self.app.focused
+        if target is None:
+            callback()
+        else:
+            target.post_message(AfterInput(callback))
+
+    def action_save(self) -> None:
+        self._after_pending_input(self._save)
+
+    def _save(self, then=None) -> None:
         buf = self.current
         if buf is None:
             return
@@ -366,6 +396,9 @@ class EditorScreen(Screen[None]):
             self.message(f"Reloaded {name}")
 
     def action_close_tab(self) -> None:
+        self._after_pending_input(self._close_tab)
+
+    def _close_tab(self) -> None:
         buf = self.current
         if buf is None:
             self.app.exit()
@@ -376,7 +409,7 @@ class EditorScreen(Screen[None]):
 
         def on_answer(answer: str) -> None:
             if answer == "y":
-                self.action_save(then=lambda: self.close_buffer(buf))
+                self._save(then=lambda: self.close_buffer(buf))
             elif answer == "n":
                 self.run_worker(self.close_buffer(buf))
 
@@ -611,6 +644,9 @@ class EditorScreen(Screen[None]):
         self.app.push_screen(HelpScreen(), lambda _: self.app.focus_editor())
 
     def action_find(self) -> None:
+        self._after_pending_input(self._find)
+
+    def _find(self) -> None:
         buf = self.current
         if buf is None:
             return
@@ -656,10 +692,10 @@ class EditorScreen(Screen[None]):
             self.message(f"No matches for '{text}'")
 
     def action_find_next(self) -> None:
-        self._find_again(True)
+        self._after_pending_input(lambda: self._find_again(True))
 
     def action_find_prev(self) -> None:
-        self._find_again(False)
+        self._after_pending_input(lambda: self._find_again(False))
 
 
 def _same_file(a: Path, b: Path) -> bool:
@@ -699,6 +735,10 @@ class TsumugiApp(App[None], inherit_bindings=False):
 
     def on_mount(self) -> None:
         self.push_screen(EditorScreen(self._files, self.config))
+
+    def on_after_input(self, message: AfterInput) -> None:
+        message.stop()
+        message.callback()
 
     @property
     def editor(self) -> EditorScreen:

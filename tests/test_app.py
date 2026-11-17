@@ -396,3 +396,68 @@ async def test_help_key_color_comes_from_css(tmp_path: Path) -> None:
         }
         assert colors["Ctrl+S"].triplet.hex == "#ea7599"
         assert "Save" not in colors
+
+
+async def _keys_at_once(pilot, app: TsumugiApp, *keys: tuple[str, str | None]) -> None:
+    """ターミナルから1回の読み込みでまとめて届いたときのように、キーを一度に積む。"""
+    from textual import events
+
+    for key, char in keys:
+        app.post_message(events.Key(key, char))
+    await pilot.pause()
+    await pilot.pause()
+
+
+async def test_save_waits_for_keys_sent_together(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one\n")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _keys_at_once(pilot, app, ("x", "x"), ("ctrl+s", None))
+        assert f.read_text() == "xone\n"
+        assert not editor(app).current.dirty
+
+
+async def test_close_tab_waits_for_keys_sent_together(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one\n")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _keys_at_once(pilot, app, ("x", "x"), ("ctrl+q", None))
+        # x が入ってから閉じようとするので、保存するか聞かれる
+        ed = editor(app)
+        assert ed.infobar.active
+        assert "Save changes" in str(ed.infobar.query_one("#prompt-label").render())
+
+
+async def test_find_waits_for_keys_sent_together(tmp_path: Path) -> None:
+    from tsumugi.prompt import PromptInput
+
+    f = tmp_path / "a.txt"
+    f.write_text("ab ab")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # → で1つ進んでから検索するので、先頭の ab ではなく次の ab が見つかる
+        await _keys_at_once(pilot, app, ("right", None), ("ctrl+f", None))
+        ed = editor(app)
+        ed.infobar.query_one(PromptInput).value = "ab"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert ed.current.selection == Selection((0, 3), (0, 5))
+
+
+async def test_save_waits_for_bound_keys_sent_together(tmp_path: Path) -> None:
+    # Backspace のようにバインディングで動くキーは App まで上がってから実行される
+    f = tmp_path / "a.txt"
+    f.write_text("one")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _keys_at_once(
+            pilot, app, ("end", None), ("backspace", None), ("ctrl+s", None)
+        )
+        assert f.read_text() == "on"
+        assert not editor(app).current.dirty
