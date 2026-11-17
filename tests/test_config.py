@@ -192,3 +192,24 @@ def test_hide_single_tab_invalid_warns(xdg: Path) -> None:
     config = load_config()
     assert config.hide_single_tab is False
     assert config.warnings
+
+
+def test_highlight_max_lines_defaults_to_3000(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().highlight_max_lines == 3000
+
+
+@pytest.mark.parametrize("value", [0, 5000])
+def test_highlight_max_lines(xdg: Path, value: int) -> None:
+    xdg.write_text(f"highlight_max_lines = {value}\n")
+    config = load_config()
+    assert config.highlight_max_lines == value
+    assert config.warnings == []
+
+
+@pytest.mark.parametrize("value", ["-1", "true", '"3000"', "3000.0"])
+def test_highlight_max_lines_invalid_warns(xdg: Path, value: str) -> None:
+    xdg.write_text(f"highlight_max_lines = {value}\n")
+    config = load_config()
+    assert config.highlight_max_lines == 3000
+    assert config.warnings

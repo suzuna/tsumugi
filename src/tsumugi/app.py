@@ -218,7 +218,12 @@ class EditorScreen(Screen[None]):
     # ---- バッファ・タブ管理 ----
 
     def _new_buffer(self, text: str = "", path: Path | None = None) -> Buffer:
-        return Buffer(text, path, soft_wrap=self._config.soft_wrap)
+        return Buffer(
+            text,
+            path,
+            soft_wrap=self._config.soft_wrap,
+            max_lines=self._config.highlight_max_lines,
+        )
 
     async def add_buffer(self, buf: Buffer, focus: bool = True) -> None:
         """バッファを今のペインのタブの末尾に加えて表示する。"""
@@ -439,11 +444,15 @@ class EditorScreen(Screen[None]):
                 self.message(f"Error creating {target.parent}: {e.strerror}")
                 return
             created = True
+        old_path = buf.path
         try:
             saved = buf.save(path)
         except OSError as e:
             self.message(f"Error saving: {e.strerror}")
             return
+        if buf.path != old_path:
+            # 名前を付けて保存したら、新しい名前で言語を決め直す
+            buf.update_language()
         self.message(f"Saved {saved}" + (" (created parent dirs)" if created else ""))
         self.refresh_bars()
         if then is not None:
@@ -883,6 +892,8 @@ class EditorScreen(Screen[None]):
                 continue
             if buf.path == old:
                 buf.path = new
+                # 拡張子が変わったかもしれないので、言語を決め直す
+                buf.update_language()
             elif buf.path.is_relative_to(old):
                 buf.path = new / buf.path.relative_to(old)
         self.refresh_bars()

@@ -7,6 +7,7 @@
     css = "style.tcss"          # 見た目のカスタム CSS（相対パスは設定ファイルのディレクトリ基準）
     mkparents = true            # 保存先のフォルダがなければ作る（既定は false、micro と同じ）
     hide_single_tab = true      # タブが1枚のときはタブバーを隠す（既定は false）
+    highlight_max_lines = 5000  # これより長いファイルはハイライトしない。0 でオフ（既定は 3000）
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ class Config:
     css: Path | None = None
     mkparents: bool = False
     hide_single_tab: bool = False
+    highlight_max_lines: int = 3000
     warnings: list[str] = field(default_factory=list)
 
 
@@ -51,6 +53,7 @@ def load_config(path: Path | None = None) -> Config:
     _read_css(data, path, config)
     _read_mkparents(data, path, config)
     _read_hide_single_tab(data, path, config)
+    _read_highlight_max_lines(data, path, config)
     return config
 
 
@@ -120,3 +123,14 @@ def _read_hide_single_tab(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f"{path}: hide_single_tab must be true or false")
         return
     config.hide_single_tab = value
+
+
+def _read_highlight_max_lines(data: dict, path: Path, config: Config) -> None:
+    value = data.get("highlight_max_lines")
+    if value is None:
+        return
+    # bool は int の仲間なので、true / false は別にはじく
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        config.warnings.append(f"{path}: highlight_max_lines must be an integer >= 0")
+        return
+    config.highlight_max_lines = value

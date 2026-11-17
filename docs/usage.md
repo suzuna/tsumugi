@@ -42,6 +42,16 @@ tsumugi ~/repos/foo  # ディレクトリを開く（ツリーの起点にして
 
 kitty keyboard protocol は既定でオフにしている。iTerm2 などでは IME の確定が kitty の形式で届き、日本語が入力できなくなるため。
 
+## シンタックスハイライト
+
+ファイル名と拡張子（拡張子がなければ1行目の shebang）から言語を決めて色を付ける。
+
+- Python、Rust、Go、JavaScript、Bash、JSON、TOML、YAML、Markdown、HTML、CSS、SQL、Java、XML は Textual が持っている文法を使う
+- それ以外の言語（R、Stan、TypeScript、C など）は tree-sitter-language-pack の文法を使う。その言語を初めて開くときに文法をダウンロードし、`~/Library/Caches/tree-sitter-language-pack/`（macOS の場合）に置く。ダウンロードが終わるまでは色が付かない。ダウンロードできなかったら下段に知らせ、tsumugi を起動し直すまでその言語には色を付けない
+- `.qmd` と `.Rmd` は Markdown として扱う。Markdown の中のコードブロックは、中の言語では色分けせず、コードとして1色で表示する
+- 行数が `highlight_max_lines`（既定は 3000）より多いファイルは、重くなるので色を付けない（[設定](config.md)）
+- 言語と行数を見るのは、開くとき・ディスクから読み直すとき・名前を付けて保存したとき・リネームしたときだけ。編集で行数が上限をまたいでも、色を付けたり消したりはしない
+
 ## タブ
 
 - タブのファイル名は表示幅20マスまで。長い名前は真ん中を `…` にして省略する（拡張子が残るよう後ろを少し多めに残す）。未保存の印 ` +` は省略せず後ろに付ける

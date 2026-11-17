@@ -5,7 +5,8 @@ description = "A tiny micro-like terminal text editor with an overlay file explo
 readme = "README.md"
 requires-python = ">=3.15"
 dependencies = [
-    "textual>=8.2.8",
+    "textual[syntax]>=8.2.8",
+    "tree-sitter-language-pack>=1.25.2",
 ]
 
 [project.scripts]

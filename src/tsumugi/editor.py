@@ -8,6 +8,9 @@ from pathlib import Path
 from textual.binding import Binding
 from textual.widgets import TextArea
 from textual.widgets.text_area import Document, Selection
+from tree_sitter import Language
+
+from .syntax import detect_language, is_builtin, load_language
 
 _ids = count(1)
 
@@ -57,7 +60,11 @@ class Buffer(TextArea):
     ]
 
     def __init__(
-        self, text: str = "", path: Path | None = None, soft_wrap: bool = False
+        self,
+        text: str = "",
+        path: Path | None = None,
+        soft_wrap: bool = False,
+        max_lines: int = 3000,
     ) -> None:
         super().__init__(
             text,
@@ -75,6 +82,8 @@ class Buffer(TextArea):
         self.disk_sig: tuple[int, int] | None = None
         # 編集中に外で変わったと知らせ済みの状態（同じ変更を何度も知らせないため）
         self.notified_sig: object = _NOT_NOTIFIED
+        # これより行数が多いファイルはハイライトしない（0 なら常にしない）
+        self.max_lines = max_lines
 
     # ---- 状態 ----
 
@@ -121,6 +130,7 @@ class Buffer(TextArea):
         self.saved_text = self.text
         self.disk_sig = sig
         self.notified_sig = _NOT_NOTIFIED
+        self.update_language()
 
     def moved_copy(self) -> Buffer:
         """別のペインへ移すための作り直し。中身・保存の状態・undo の履歴・選択範囲を引き継ぐ。
@@ -129,7 +139,9 @@ class Buffer(TextArea):
         元のほうを外す。undo の履歴（Edit）は適用先の TextArea を引数で受け取る作りなので、
         そのまま渡せる。
         """
-        new = Buffer(self.text, self.path, soft_wrap=self.soft_wrap)
+        new = Buffer(
+            self.text, self.path, soft_wrap=self.soft_wrap, max_lines=self.max_lines
+        )
         new.saved_text = self.saved_text
         new.disk_sig = self.disk_sig
         new.notified_sig = self.notified_sig
@@ -140,10 +152,71 @@ class Buffer(TextArea):
     _restore_selection: Selection | None = None
 
     def on_mount(self) -> None:
+        # 言語を変えるとカーソルが先頭に戻るので、選択範囲を戻す前に決める。
+        # on_mount の中ではまだ is_mounted が False なので、自分のフラグで見る
+        self._language_ready = True
+        self.update_language()
         if self._restore_selection is not None:
             self.selection = self._restore_selection
             self._restore_selection = None
             self.call_after_refresh(self.scroll_cursor_visible)
+
+    # ---- シンタックスハイライト ----
+
+    def update_language(self) -> None:
+        """パスと行数からハイライトの言語を決め直す。
+
+        開いたとき・ディスクから読み直したとき・名前が変わったときに呼ぶ。編集中は呼ばない
+        （行数が上限をまたぐたびに色が付いたり消えたりしないように）。
+        """
+        if not self._language_ready:
+            return  # on_mount で決める
+        name = None
+        if 0 < self.max_lines and self.document.line_count <= self.max_lines:
+            name = detect_language(self.path, self.document.get_line(0))
+        self._pending_language = None
+        if name is None or is_builtin(name) or name in self._languages:
+            self._set_language(name)
+            return
+        # language-pack の文法は初回にダウンロードするので、画面を止めないようスレッドで取る。
+        # 取れるまではハイライトなしにしておく
+        self._set_language(None)
+        self._pending_language = name
+        self.run_worker(
+            lambda: self._load_language(name),
+            thread=True,
+            group="syntax",
+            exclusive=True,
+        )
+
+    # マウントして、言語を決めてよくなったか
+    _language_ready = False
+    # language-pack から取っている途中の言語
+    _pending_language: str | None = None
+
+    def _load_language(self, name: str) -> None:
+        loaded = load_language(name)
+        self.app.call_from_thread(self._apply_loaded, name, loaded)
+
+    def _apply_loaded(self, name: str, loaded: tuple[Language, str] | None) -> None:
+        if not self.is_mounted or self._pending_language != name:
+            return  # 取っている間に閉じたか、名前が変わって別の言語になった
+        self._pending_language = None
+        if loaded is None:
+            self.app.show_message(f"Cannot load syntax for {name}")
+            return
+        self.register_language(name, *loaded)
+        self._set_language(name)
+
+    def _set_language(self, name: str | None) -> None:
+        """言語を切り替える。TextArea は切り替えると先頭へ戻るので、位置を戻す。"""
+        if self.language == name:
+            return
+        selection = self.selection
+        scroll = self.scroll_offset
+        self.language = name
+        self.selection = selection
+        self.scroll_to(scroll.x, scroll.y, animate=False, immediate=True)
 
     # ---- micro 固有の動作 ----
 
