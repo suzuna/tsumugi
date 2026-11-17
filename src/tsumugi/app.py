@@ -23,7 +23,13 @@ from textual.widgets import DirectoryTree, TextArea
 
 from .config import Config, load_config
 from .editor import Buffer, file_sig
-from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
+from .explorer import (
+    ExplorerPanel,
+    ExplorerScreen,
+    display_path,
+    resolve_dir,
+    truncate_left,
+)
 from .help import HelpScreen
 from .panes import Pane
 from .prompt import InfoBar
@@ -809,16 +815,12 @@ class EditorScreen(Screen[None]):
         base = self.explorer_root
 
         def on_path(text: str) -> None:
-            text = text.strip()
-            if not text:
+            if not text.strip():
                 self.message("Cancelled")
                 return
-            target = Path(text).expanduser()
-            if not target.is_absolute():
-                target = base / target
-            target = target.resolve()
-            if not target.is_dir():
-                self.message(f"{display_path(target)} is not a directory")
+            target = resolve_dir(text, base)
+            if isinstance(target, str):
+                self.message(target)
                 return
             if not self._set_root(target):
                 return

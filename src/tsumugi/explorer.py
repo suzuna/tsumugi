@@ -11,11 +11,11 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import DirectoryTree
+from textual.widgets import DirectoryTree, Input, Label
 from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
 from textual.worker import get_current_worker
@@ -216,6 +216,20 @@ def display_path(root: Path) -> str:
     except ValueError:
         return str(root)
     return "~" if str(rel) == "." else f"~/{rel}"
+
+
+def resolve_dir(text: str, base: Path) -> Path | str:
+    """入力されたパスをディレクトリの絶対パスにする。ディレクトリでなければエラー文を返す。
+
+    `~` を展開し、相対パスは base から数える。
+    """
+    target = Path(text.strip()).expanduser()
+    if not target.is_absolute():
+        target = base / target
+    target = target.resolve()
+    if not target.is_dir():
+        return f"{display_path(target)} is not a directory"
+    return target
 
 
 ELLIPSIS = "…"
@@ -438,6 +452,110 @@ class ExplorerPanel(Vertical):
         self.post_message(self.Changed(self))
 
 
+class GoToInput(Input):
+    BINDINGS = [
+        Binding("escape", "cancel", show=False),
+    ]
+
+    def action_cancel(self) -> None:
+        for node in self.ancestors:
+            if isinstance(node, GoToBar):
+                node.hide()
+                return
+
+
+class GoToBar(Vertical):
+    """オーバーレイの下に出す、パスを入れてディレクトリを開く入力欄（g）。
+
+    ツリーのキー（o / s / . / Backspace など）が入力中に効かないよう、ExplorerPanel の
+    外（兄弟）に置く。エラーは入力欄を狭めないよう下の行に出す。
+    """
+
+    DEFAULT_CSS = """
+    GoToBar {
+        display: none;
+        height: auto;
+        width: 1fr;
+    }
+    GoToBar.-visible {
+        display: block;
+    }
+    GoToBar > Horizontal {
+        height: 1;
+    }
+    GoToBar Label {
+        width: auto;
+        height: 1;
+    }
+    GoToBar > #goto-error {
+        display: none;
+        color: $error;
+    }
+    GoToBar.-error > #goto-error {
+        display: block;
+    }
+    GoToBar GoToInput {
+        width: 1fr;
+        height: 1;
+        border: none;
+        padding: 0;
+        background: transparent;
+    }
+    GoToBar GoToInput:focus {
+        border: none;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Horizontal():
+            yield Label("Go to: ")
+            yield GoToInput(id="goto-input", select_on_focus=False)
+        yield Label("", id="goto-error")
+
+    @property
+    def input(self) -> GoToInput:
+        return self.query_one(GoToInput)
+
+    @property
+    def visible(self) -> bool:
+        return self.has_class("-visible")
+
+    def show(self, initial: str) -> None:
+        inp = self.input
+        inp.value = initial
+        inp.cursor_position = len(initial)
+        self._set_error("")
+        self.add_class("-visible")
+        inp.focus()
+
+    def _set_error(self, text: str) -> None:
+        self.query_one("#goto-error", Label).update(text)
+        self.set_class(bool(text), "-error")
+
+    def hide(self) -> None:
+        self.remove_class("-visible")
+        self.screen.query_one(FileTree).focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        event.stop()
+        self._set_error("")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        screen = self.screen
+        assert isinstance(screen, ExplorerScreen)
+        if not event.value.strip():
+            self.hide()
+            return
+        target = resolve_dir(event.value, screen.root)
+        if isinstance(target, str):
+            self._set_error(target)
+            return
+        # o と同じく、起点を変えて閉じる。メイン画面への反映は閉じたあとに行う
+        screen.panel.set_root(target)
+        screen.dismiss(None)
+
+
 class ExplorerScreen(ModalScreen[Path | None]):
     """オーバーレイ版。ツリーからファイルを選ぶと、そのパスを返して閉じる。"""
 
@@ -445,7 +563,7 @@ class ExplorerScreen(ModalScreen[Path | None]):
     ExplorerScreen {
         align: center middle;
     }
-    ExplorerScreen > ExplorerPanel {
+    ExplorerScreen #explorer-box {
         width: 70%;
         max-width: 100;
         height: 80%;
@@ -455,10 +573,14 @@ class ExplorerScreen(ModalScreen[Path | None]):
         background: $surface;
         padding: 0 1;
     }
+    ExplorerScreen #explorer-box > ExplorerPanel {
+        height: 1fr;
+    }
     """
 
     BINDINGS = [
         Binding("escape,ctrl+b", "close", "Close", show=False),
+        Binding("g", "go_to", "Go to directory", show=False),
     ]
 
     def __init__(
@@ -470,14 +592,16 @@ class ExplorerScreen(ModalScreen[Path | None]):
         self._initial_sort_desc = sort_desc
 
     def compose(self) -> ComposeResult:
-        panel = ExplorerPanel(
-            self._initial_root, self._initial_show_hidden, self._initial_sort_desc
-        )
-        panel.border_title = "Explorer"
-        panel.border_subtitle = (
-            "Enter: open/expand  o: cd  BS: parent  .: hidden  s: sort  Esc: close"
-        )
-        yield panel
+        with Vertical(id="explorer-box") as box:
+            box.border_title = "Explorer"
+            box.border_subtitle = (
+                "Enter: open/expand  o: cd  g: go to  BS: parent  .: hidden  s: sort"
+                "  Esc: close"
+            )
+            yield ExplorerPanel(
+                self._initial_root, self._initial_show_hidden, self._initial_sort_desc
+            )
+            yield GoToBar()
 
     def on_mount(self) -> None:
         self.query_one(FileTree).focus()
@@ -500,6 +624,9 @@ class ExplorerScreen(ModalScreen[Path | None]):
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def action_go_to(self) -> None:
+        self.query_one(GoToBar).show(display_path(self.root).rstrip("/") + "/")
 
     def on_directory_tree_file_selected(
         self, event: DirectoryTree.FileSelected
