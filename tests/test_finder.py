@@ -321,3 +321,22 @@ async def test_ctrl_o_uses_current_root(proj: Path) -> None:
         await pilot.press(*"app")
         await pilot.pause()
         assert _shown(screen) == ["test_app.py"]
+
+
+async def test_ctrl_o_highlighted_candidate_is_visible(proj: Path) -> None:
+    app = make_app(proj)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = await _open_finder(pilot, app)
+        await pilot.press(*"appy")
+        await pilot.pause()
+        options = screen.query_one(FinderList)
+        # 一覧はフォーカスを持たないが、選んでいる行はフォーカス中と同じ色にする
+        assert not options.has_focus
+        style = options.get_component_rich_style("option-list--option-highlighted")
+        normal = options.get_component_rich_style("option-list--option")
+        assert style.bgcolor is not None
+        assert style != normal
+        await pilot.press("down")
+        await pilot.pause()
+        assert options.highlighted == 1

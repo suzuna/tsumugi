@@ -214,6 +214,12 @@ class FinderScreen(ModalScreen[Path | None]):
         padding: 0;
         background: transparent;
     }
+    /* 一覧はフォーカスを持たないので、フォーカス中と同じ色で選んでいる行を見せる */
+    FinderScreen FinderList > .option-list--option-highlighted {
+        color: $block-cursor-foreground;
+        background: $block-cursor-background;
+        text-style: $block-cursor-text-style;
+    }
     """
 
     BINDINGS = [
