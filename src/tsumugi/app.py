@@ -22,7 +22,7 @@ from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
 from .help import HelpScreen
 from .prompt import InfoBar
 from .scrollbar import install as install_scrollbar
-from .statusbar import StatusBar
+from .statusbar import StatusBar, status_path
 from .tabs import TabBar
 
 # プロンプト入力中でも有効なアクション
@@ -89,6 +89,8 @@ class EditorScreen(Screen[None]):
         self.explorer_root = config.explorer_root
         self.explorer_show_hidden = False
         self.explorer_sort_desc = config.tree_sort == "desc"
+        # ステータスバーのパスはここからの相対パスで出す
+        self.cwd = Path.cwd().resolve()
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
@@ -162,7 +164,11 @@ class EditorScreen(Screen[None]):
         if buf is not None:
             row, col = buf.cursor_location
             self.query_one(StatusBar).update_status(
-                buf.display_name, buf.dirty, row, col, buf.document.newline
+                status_path(buf.path, self.cwd),
+                buf.dirty,
+                row,
+                col,
+                buf.document.newline,
             )
 
     async def open_path(self, path: Path, focus: bool = True) -> None:
