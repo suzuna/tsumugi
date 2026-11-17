@@ -18,52 +18,25 @@ def test_config_path_uses_xdg(xdg: Path) -> None:
     assert config_path() == xdg
 
 
-def test_load_explorer_root(xdg: Path, tmp_path: Path) -> None:
-    root = tmp_path / "proj"
-    root.mkdir()
-    xdg.write_text(f'explorer_root = "{root}"\n')
+def test_missing_file_uses_defaults(xdg: Path) -> None:
     config = load_config()
-    assert config.explorer_root == root.resolve()
+    assert config == Config()
     assert config.warnings == []
-
-
-def test_missing_file_defaults_to_home(xdg: Path) -> None:
-    config = load_config()
-    assert config.explorer_root == Path.home()
-    assert config.warnings == []
-
-
-def test_missing_key_defaults_to_home(xdg: Path) -> None:
-    xdg.write_text("# empty\n")
-    assert load_config().explorer_root == Path.home()
-
-
-def test_nonexistent_dir_warns(xdg: Path, tmp_path: Path) -> None:
-    xdg.write_text(f'explorer_root = "{tmp_path / "nope"}"\n')
-    config = load_config()
-    assert config.explorer_root == Path.home()
-    assert config.warnings
 
 
 def test_broken_toml_warns(xdg: Path) -> None:
-    xdg.write_text("explorer_root = \n")
+    xdg.write_text("sidebar = \n")
     config = load_config()
-    assert config.explorer_root == Path.home()
+    assert config.sidebar is False
     assert config.warnings
 
 
-def test_tilde_is_expanded(xdg: Path) -> None:
-    xdg.write_text('explorer_root = "~"\n')
-    assert load_config().explorer_root == Path.home().resolve()
-
-
-async def test_explorer_starts_at_configured_root(tmp_path: Path) -> None:
-    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path))
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("ctrl+b")
-        await pilot.pause()
-        assert app.screen.root == tmp_path
+def test_old_explorer_root_is_ignored(xdg: Path) -> None:
+    # 起点は起動したディレクトリになったので、古い設定が残っていても黙って無視する
+    xdg.write_text('explorer_root = "~/repos"\nsidebar = true\n')
+    config = load_config()
+    assert config.sidebar is True
+    assert config.warnings == []
 
 
 async def test_config_warning_is_shown(tmp_path: Path) -> None:
@@ -94,10 +67,10 @@ def test_sidebar_not_bool_warns(xdg: Path) -> None:
     assert config.warnings
 
 
-def test_sidebar_read_even_if_root_invalid(xdg: Path, tmp_path: Path) -> None:
-    xdg.write_text(f'explorer_root = "{tmp_path / "nope"}"\nsidebar = true\n')
+def test_sidebar_read_even_if_other_key_invalid(xdg: Path) -> None:
+    xdg.write_text('tree_sort = "random"\nsidebar = true\n')
     config = load_config()
-    assert config.explorer_root == Path.home()
+    assert config.tree_sort == "asc"
     assert config.sidebar is True
     assert len(config.warnings) == 1
 

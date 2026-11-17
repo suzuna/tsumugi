@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -103,11 +104,12 @@ class EditorScreen(Screen[None]):
         self._config = config
         self.buffers: list[Buffer] = []
         self.last_search = ""
-        self.explorer_root = config.explorer_root
-        self.explorer_show_hidden = False
-        self.explorer_sort_desc = config.tree_sort == "desc"
         # ステータスバーのパスはここからの相対パスで出す
         self.cwd = Path.cwd().resolve()
+        # ツリーの起点は起動したディレクトリ（`tsumugi <dir>` なら main で chdir 済み）
+        self.explorer_root = self.cwd
+        self.explorer_show_hidden = False
+        self.explorer_sort_desc = config.tree_sort == "desc"
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
@@ -801,8 +803,34 @@ def terminal_title(title: str, stream: TextIO) -> Iterator[None]:
         stream.flush()
 
 
+class UsageError(Exception):
+    pass
+
+
+def parse_args(args: list[str]) -> tuple[list[Path], Path | None]:
+    """コマンドライン引数を、開くファイルと起点のディレクトリに分ける。
+
+    ファイルは chdir の前に絶対パスにしておく（`tsumugi dir a.txt` の a.txt はシェルの
+    カレントディレクトリから数える）。ディレクトリは1つまで。
+    """
+    files: list[Path] = []
+    dirs: list[Path] = []
+    for arg in args:
+        path = Path(arg).expanduser().absolute()
+        (dirs if path.is_dir() else files).append(path)
+    if len(dirs) > 1:
+        raise UsageError("only one directory can be given")
+    return files, (dirs[0] if dirs else None)
+
+
 def main() -> None:
-    files = [Path(arg) for arg in sys.argv[1:]]
+    try:
+        files, root = parse_args(sys.argv[1:])
+        if root is not None:
+            os.chdir(root)
+    except (UsageError, OSError) as e:
+        print(f"tsumugi: {e}", file=sys.stderr)
+        sys.exit(2)
     with terminal_title("tsumugi", sys.__stdout__):
         TsumugiApp(files, config=load_config()).run()
 

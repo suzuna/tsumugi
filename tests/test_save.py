@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -7,8 +8,11 @@ from tsumugi.config import Config
 from tsumugi.prompt import PromptInput
 
 
-def make_app(tmp_path: Path, *files: Path, **config) -> TsumugiApp:
-    config.setdefault("explorer_root", tmp_path)
+def make_app(
+    tmp_path: Path, *files: Path, root: Path | None = None, **config
+) -> TsumugiApp:
+    # ツリーの起点（相対パスで保存するときの基準）は起動したディレクトリ
+    os.chdir(root or tmp_path)
     return TsumugiApp(list(files), system_clipboard=False, config=Config(**config))
 
 
@@ -135,7 +139,7 @@ async def test_close_save_overwrite_then_closes(tmp_path: Path) -> None:
         assert len(app.editor.buffers) == 1
 
 
-async def test_relative_name_saves_under_explorer_root(tmp_path: Path) -> None:
+async def test_relative_name_saves_under_tree_root(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -149,7 +153,7 @@ async def test_relative_name_saves_under_explorer_root(tmp_path: Path) -> None:
 async def test_relative_name_follows_sidebar_root(tmp_path: Path) -> None:
     sub = tmp_path / "sub"
     sub.mkdir()
-    app = make_app(tmp_path, explorer_root=sub)
+    app = make_app(tmp_path, root=sub)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")

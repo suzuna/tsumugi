@@ -1,7 +1,6 @@
 """設定ファイル（$XDG_CONFIG_HOME/tsumugi/config.toml）の読み込み。
 
 例:
-    explorer_root = "~/repos"   # ツリーの起点（既定は ~）
     sidebar = true              # 起動時にサイドバーを開く（既定は false）
     tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
     soft_wrap = true            # 長い行を右端で折り返す（既定は false）
@@ -19,7 +18,6 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    explorer_root: Path = field(default_factory=Path.home)
     sidebar: bool = False
     tree_sort: str = "asc"
     soft_wrap: bool = False
@@ -45,33 +43,12 @@ def load_config(path: Path | None = None) -> Config:
         return config
 
     # 項目ごとに独立して読む（ある項目が不正でも、ほかの項目は効く）
-    _read_explorer_root(data, path, config)
     _read_sidebar(data, path, config)
     _read_tree_sort(data, path, config)
     _read_soft_wrap(data, path, config)
     _read_css(data, path, config)
     _read_mkparents(data, path, config)
     return config
-
-
-def _read_explorer_root(data: dict, path: Path, config: Config) -> None:
-    root = data.get("explorer_root")
-    if root is None:
-        return
-    if not isinstance(root, str):
-        config.warnings.append(f"{path}: explorer_root must be a string")
-        return
-    root_path = Path(root).expanduser()
-    if not root_path.is_absolute():
-        # 相対パスはホームディレクトリ基準で解決する
-        root_path = Path.home() / root_path
-    root_path = root_path.resolve()
-    if not root_path.is_dir():
-        config.warnings.append(
-            f"{path}: explorer_root {root} is not a directory, using ~"
-        )
-        return
-    config.explorer_root = root_path
 
 
 def _read_sidebar(data: dict, path: Path, config: Config) -> None:

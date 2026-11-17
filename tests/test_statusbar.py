@@ -32,7 +32,7 @@ async def test_status_bar_shows_relative_path(
     f.parent.mkdir(parents=True)
     f.write_text("x")
     monkeypatch.chdir(tmp_path)
-    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp([f], system_clipboard=False, config=Config())
     async with app.run_test(size=(80, 10)) as pilot:
         await pilot.pause()
         text = _bar_text(app)
@@ -49,7 +49,7 @@ async def test_long_path_is_truncated_from_head(
     f.parent.mkdir()
     f.write_text("x")
     monkeypatch.chdir(tmp_path)
-    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp([f], system_clipboard=False, config=Config())
     async with app.run_test(size=(60, 10)) as pilot:
         await pilot.pause()
         text = _bar_text(app)
@@ -66,7 +66,7 @@ async def test_dirty_mark_is_kept_when_path_is_truncated(
     f.parent.mkdir()
     f.write_text("x")
     monkeypatch.chdir(tmp_path)
-    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp([f], system_clipboard=False, config=Config())
     async with app.run_test(size=(60, 10)) as pilot:
         await pilot.pause()
         await pilot.press("y")
@@ -77,7 +77,7 @@ async def test_dirty_mark_is_kept_when_path_is_truncated(
 
 
 async def test_status_bar_has_no_help_hint(tmp_path: Path) -> None:
-    app = TsumugiApp([], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp([], system_clipboard=False, config=Config())
     async with app.run_test() as pilot:
         await pilot.pause()
         assert "Ctrl-g" not in _bar_text(app)
@@ -91,7 +91,7 @@ async def test_status_bar_shows_newline_style(
 ) -> None:
     f = tmp_path / "a.txt"
     f.write_bytes(f"one{nl}two{nl}".encode())
-    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    app = TsumugiApp([f], system_clipboard=False, config=Config())
     async with app.run_test() as pilot:
         await pilot.pause()
         assert _bar_text(app).endswith(f"(1,1) | {label} | utf-8 ")

@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 
+import pytest
 from textual.widgets.text_area import Selection
 
-from tsumugi.app import EditorScreen, TsumugiApp
+from tsumugi.app import EditorScreen, TsumugiApp, UsageError, parse_args
 from tsumugi.config import Config
 from tsumugi.editor import Buffer
 from tsumugi.explorer import ExplorerScreen, FileTree
@@ -147,13 +149,43 @@ async def test_explorer_parent_and_close(tmp_path: Path) -> None:
         assert ed.explorer_root == tmp_path  # 次回は前回の場所から
 
 
-async def test_explorer_default_root_is_home() -> None:
+async def test_explorer_root_is_cwd(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
     app = make_app()
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+b")
         await pilot.pause()
-        assert app.screen.root == Path.home()
+        assert app.screen.root == tmp_path.resolve()
+
+
+def test_parse_args_without_args() -> None:
+    assert parse_args([]) == ([], None)
+
+
+def test_parse_args_files_become_absolute(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("a")
+    files, root = parse_args(["a.txt", "new.txt"])
+    assert files == [tmp_path / "a.txt", tmp_path / "new.txt"]
+    assert all(f.is_absolute() for f in files)
+    assert root is None
+
+
+def test_parse_args_directory_becomes_root(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    (tmp_path / "proj").mkdir()
+    # ファイルはディレクトリではなく、シェルのカレントディレクトリから数える
+    files, root = parse_args(["proj", "a.txt"])
+    assert root == tmp_path / "proj"
+    assert files == [tmp_path / "a.txt"]
+
+
+def test_parse_args_rejects_two_directories(tmp_path: Path) -> None:
+    (tmp_path / "d1").mkdir()
+    (tmp_path / "d2").mkdir()
+    with pytest.raises(UsageError):
+        parse_args([str(tmp_path / "d1"), str(tmp_path / "d2")])
 
 
 async def test_open_replaces_empty_untitled(tmp_path: Path) -> None:
@@ -304,9 +336,8 @@ async def test_custom_css_is_applied(tmp_path: Path) -> None:
         "EditorScreen #sidebar { border-right: vkey #ea7599; }\n"
         "EditorScreen Buffer { background: #180b33; }\n"
     )
-    app = TsumugiApp(
-        [], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css)
-    )
+    os.chdir(tmp_path)
+    app = TsumugiApp([], system_clipboard=False, config=Config(css=css))
     async with app.run_test() as pilot:
         await pilot.pause()
         bar = editor(app).query_one(StatusBar)
@@ -381,9 +412,8 @@ async def test_help_key_color_comes_from_css(tmp_path: Path) -> None:
 
     css = tmp_path / "style.tcss"
     css.write_text("HelpText > .help--key { color: #ea7599; }\n")
-    app = TsumugiApp(
-        [], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css)
-    )
+    os.chdir(tmp_path)
+    app = TsumugiApp([], system_clipboard=False, config=Config(css=css))
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+g")

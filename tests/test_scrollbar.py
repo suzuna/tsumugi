@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -67,9 +68,8 @@ async def test_scrollbars_are_one_cell_and_thin(tmp_path: Path) -> None:
         (tmp_path / f"f{i:03}.txt").write_text("x")
     long = tmp_path / "long.txt"
     long.write_text("\n".join("line " * 40 for _ in range(200)))
-    app = TsumugiApp(
-        [long], system_clipboard=False, config=Config(explorer_root=tmp_path)
-    )
+    os.chdir(tmp_path)
+    app = TsumugiApp([long], system_clipboard=False, config=Config())
     async with app.run_test(size=(80, 20)) as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")
