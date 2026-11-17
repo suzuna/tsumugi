@@ -374,3 +374,25 @@ async def test_active_tab_style_comes_from_css(tmp_path: Path) -> None:
         assert segments["b.txt"].underline
         assert not segments["a.txt"].underline
         assert segments["a.txt"].bgcolor.triplet.hex == "#ea7599"
+
+
+async def test_help_key_color_comes_from_css(tmp_path: Path) -> None:
+    from tsumugi.help import HelpText
+
+    css = tmp_path / "style.tcss"
+    css.write_text("HelpText > .help--key { color: #ea7599; }\n")
+    app = TsumugiApp(
+        [], system_clipboard=False, config=Config(explorer_root=tmp_path, css=css)
+    )
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        text = app.screen.query_one(HelpText).render()
+        colors = {
+            text.plain[span.start : span.end].strip(): span.style.color
+            for span in text.spans
+            if not isinstance(span.style, str) and span.style.color is not None
+        }
+        assert colors["Ctrl+S"].triplet.hex == "#ea7599"
+        assert "Save" not in colors

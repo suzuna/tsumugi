@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
@@ -61,18 +62,36 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
 ]
 
 
-def _help_text() -> str:
-    out: list[str] = []
-    for section, rows in KEYS:
-        out.append(f"[b]{section}[/b]")
-        for key, desc in rows:
-            out.append(f"  [$accent]{key:<20}[/] {desc}")
-        out.append("")
-    out.append(
-        "(*) only with TEXTUAL_DISABLE_KITTY_KEY=0 in terminals that support"
-        " the kitty keyboard protocol"
-    )
-    return "\n".join(out).rstrip()
+NOTE = (
+    "(*) only with TEXTUAL_DISABLE_KITTY_KEY=0 in terminals that support"
+    " the kitty keyboard protocol"
+)
+
+
+class HelpText(Static):
+    """キーの一覧。キーの列の色は component class で付ける（カスタム CSS で変えられるように）。"""
+
+    COMPONENT_CLASSES = {"help--key"}
+
+    DEFAULT_CSS = """
+    HelpText > .help--key {
+        color: $accent;
+    }
+    """
+
+    def render(self) -> Text:
+        key_style = self.get_component_rich_style("help--key", partial=True)
+        text = Text()
+        for section, rows in KEYS:
+            text.append(section, style="bold")
+            text.append("\n")
+            for key, desc in rows:
+                text.append("  ")
+                text.append(f"{key:<20}", style=key_style)
+                text.append(f" {desc}\n")
+            text.append("\n")
+        text.append(NOTE)
+        return text
 
 
 class HelpScreen(ModalScreen[None]):
@@ -99,7 +118,7 @@ class HelpScreen(ModalScreen[None]):
         with VerticalScroll() as box:
             box.border_title = "tsumugi help"
             box.border_subtitle = "Esc: close"
-            yield Static(_help_text())
+            yield HelpText()
 
     def action_close(self) -> None:
         self.dismiss(None)

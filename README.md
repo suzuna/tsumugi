@@ -104,7 +104,7 @@ mkparents = true
 
 `css` に Textual CSS（`.tcss`）のパスを書くと、既定の見た目より優先して読み込む。相対パスは設定ファイルと同じディレクトリから探す。
 
-主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）、`TabBar`（上のタブバー）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。タブバーで選択中のタブは `TabBar > .tab-bar--active` で、既定は `text-style: reverse bold`。
+主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）、`TabBar`（上のタブバー）、`ExplorerScreen > ExplorerPanel`（エクスプローラのオーバーレイの枠）、`HelpScreen > VerticalScroll`（ヘルプの枠）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。タブバーで選択中のタブは `TabBar > .tab-bar--active` で、既定は `text-style: reverse bold`。ヘルプのキーの列は `HelpText > .help--key` で、既定は `color: $accent`。
 
 ```css
 StatusBar {
