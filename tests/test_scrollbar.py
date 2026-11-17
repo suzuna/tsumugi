@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from rich.color import Color
+from textual.color import Color as TColor
 from textual.scrollbar import ScrollBar
 
 from tsumugi.app import TsumugiApp
@@ -83,3 +84,25 @@ async def test_scrollbars_are_one_cell_and_thin(tmp_path: Path) -> None:
         assert buf.show_vertical_scrollbar
         assert buf.show_horizontal_scrollbar
         assert tree.show_vertical_scrollbar
+
+
+async def test_scrollbar_colors_are_monochrome_by_default(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    app = TsumugiApp(system_clipboard=False, config=Config(sidebar=False))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        styles = app.editor.current.styles
+        assert styles.scrollbar_color == TColor.parse("ansi_bright_black")
+        assert styles.scrollbar_color_hover == TColor.parse("ansi_white")
+        assert styles.scrollbar_color_active == TColor.parse("ansi_white")
+        assert styles.scrollbar_background == TColor.parse("ansi_default")
+
+
+async def test_scrollbar_colors_can_be_overridden_by_css(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    css = tmp_path / "style.tcss"
+    css.write_text("* { scrollbar-color: #f5a3c0; }\n")
+    app = TsumugiApp(system_clipboard=False, config=Config(sidebar=False, css=css))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.editor.current.styles.scrollbar_color == TColor.parse("#f5a3c0")

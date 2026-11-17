@@ -10,6 +10,7 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import TextIO
 
@@ -19,6 +20,7 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
 from textual.screen import Screen
+from textual.theme import BUILTIN_THEMES, Theme
 from textual.widgets import DirectoryTree, TextArea
 
 from .config import Config, load_config
@@ -1133,6 +1135,30 @@ def _same_file(a: Path, b: Path) -> bool:
         return False
 
 
+def _make_theme() -> Theme:
+    """ansi-dark のスクロールバーの色だけ白黒系に替えたテーマ。
+
+    ansi-dark の既定（青）はタブバーなどと紛れやすいので、つまみはグレー、マウスを乗せたり
+    つかんだりしている間は白、溝は端末の背景色にする。CSS ではなくテーマの変数で替えるのは、
+    App.CSS に書くとユーザーの CSS より優先されて上書きできなくなるから。
+    """
+    base = BUILTIN_THEMES["ansi-dark"]
+    return replace(
+        base,
+        name="tsumugi",
+        variables={
+            **base.variables,
+            "scrollbar": "ansi_bright_black",
+            "scrollbar-hover": "ansi_white",
+            "scrollbar-active": "ansi_white",
+            "scrollbar-background": "ansi_default",
+            "scrollbar-background-hover": "ansi_default",
+            "scrollbar-background-active": "ansi_default",
+            "scrollbar-corner-color": "ansi_default",
+        },
+    )
+
+
 class TsumugiApp(App[None], inherit_bindings=False):
     TITLE = "tsumugi"
     ENABLE_COMMAND_PALETTE = False
@@ -1162,7 +1188,8 @@ class TsumugiApp(App[None], inherit_bindings=False):
         self._files = files or []
         self.system_clipboard = system_clipboard
         self.config = config
-        self.theme = "ansi-dark"
+        self.register_theme(_make_theme())
+        self.theme = "tsumugi"
 
     def on_mount(self) -> None:
         self.push_screen(EditorScreen(self._files, self.config))
