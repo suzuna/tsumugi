@@ -12,7 +12,8 @@ from textual.widget import Widget
 
 class TabBar(Widget):
     # 選択中のタブの見た目は component class で付ける（カスタム CSS で変えられるように）。
-    # 分割しているとき、操作していないほうのペインの選択中のタブは tab-bar--unfocused
+    # 分割しているとき、操作していないほうのペインの選択中のタブは tab-bar--unfocused。
+    # 操作中のペインのタブバーには -focused クラスが付く
     COMPONENT_CLASSES = {"tab-bar--active", "tab-bar--unfocused"}
 
     DEFAULT_CSS = """
@@ -22,12 +23,16 @@ class TabBar(Widget):
         /* 選択していないタブはグレー */
         color: ansi_bright_black;
     }
-    /* 操作中のペインの選択タブはアクセント色の背景にして、どのペインを操作中か分かるようにする */
-    TabBar > .tab-bar--active {
-        background: $accent;
-        color: ansi_black;
+    /* 操作中のペインはバーの背景に色を付けて、どのペインを操作中か分かるようにする */
+    TabBar.-focused {
+        background: ansi_bright_black;
+        color: ansi_default;
     }
-    /* 操作していないペインの選択タブは、本文と同じ文字色にしてグレーのタブと見分ける */
+    /* 選択タブは背景をエディタと同じにして、本文とつながって見えるようにする */
+    TabBar > .tab-bar--active {
+        background: $background;
+        color: ansi_default;
+    }
     TabBar > .tab-bar--unfocused {
         color: ansi_default;
     }
@@ -82,6 +87,8 @@ class TabBar(Widget):
         self._labels = labels
         self._active = active
         self._focused = focused
+        # 操作中のペインのバーは CSS（TabBar.-focused）で色を変える
+        self.set_class(focused, "-focused")
         self._first = min(self._first, max(len(labels) - 1, 0))
         self.display = len(labels) > (1 if self._hide_single else 0)
         self.refresh()

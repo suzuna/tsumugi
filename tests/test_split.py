@@ -304,7 +304,7 @@ async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
         assert app.is_running
 
 
-async def test_active_pane_tab_has_background(tmp_path: Path) -> None:
+async def test_active_pane_tab_bar_has_background(tmp_path: Path) -> None:
     a, b = files(tmp_path, "a.txt", "b.txt")
     app = make_app(tmp_path, a, b)
     async with app.run_test() as pilot:
@@ -314,23 +314,32 @@ async def test_active_pane_tab_has_background(tmp_path: Path) -> None:
         await settle(pilot)
         left, right = ed.panes
 
-        def selected_style(pane):
-            seg = next(
-                s for s in pane.query_one(TabBar).render_line(0) if s.text.strip()
-            )
-            return seg.style
+        def segments(pane):
+            return list(pane.query_one(TabBar).render_line(0))
 
-        # 操作中のペインの選択タブだけ背景色が付く。太字・下線・反転はどちらにも付けない
-        assert not selected_style(right).bgcolor.is_default
-        assert selected_style(left).bgcolor.is_default
-        for style in (selected_style(right), selected_style(left)):
+        def selected_style(pane):
+            return next(s for s in segments(pane) if s.text.strip()).style
+
+        def bar_bgcolor(pane):
+            # タブより右の、何も描いていない部分の背景
+            return segments(pane)[-1].style.bgcolor
+
+        # 操作中のペインのバーだけ背景色が付く
+        assert right.query_one(TabBar).has_class("-focused")
+        assert not left.query_one(TabBar).has_class("-focused")
+        assert not bar_bgcolor(right).is_default
+        assert bar_bgcolor(left).is_default
+        # 選択タブはどちらのペインでもエディタと同じ背景で、太字・下線・反転は付けない
+        for pane in (left, right):
+            style = selected_style(pane)
+            assert style.bgcolor.is_default
             assert not style.bold
             assert not style.underline
             assert not style.reverse
         await pilot.press("ctrl+u")
         await pilot.pause()
-        assert not selected_style(left).bgcolor.is_default
-        assert selected_style(right).bgcolor.is_default
+        assert not bar_bgcolor(left).is_default
+        assert bar_bgcolor(right).is_default
 
 
 # ---- ドラッグ & ドロップ ----
