@@ -23,6 +23,12 @@ from textual.worker import get_current_worker
 # Textual の Tree と同じ。この meta が付いた部分をクリックすると開閉する
 TOGGLE_STYLE = Style.from_meta({"toggle": True})
 
+# ツリーとディスクの食い違いを確かめる間隔（秒）
+TREE_POLL_INTERVAL = 0.5
+
+# 展開済みのディレクトリごとの、ツリーに出ている子のパス
+Snapshot = dict[Path, set[Path]]
+
 
 def sort_paths(
     paths: list[Path], desc: bool, is_dir: Callable[[Path], bool]
@@ -97,6 +103,39 @@ class FileTree(DirectoryTree):
                 self.move_cursor(node)
                 return True
             stack.extend(node.children)
+        return False
+
+    @property
+    def is_busy(self) -> bool:
+        """ディレクトリの読み込み中（中身がまだツリーに入っていないかもしれない）。"""
+        return self.lock.is_locked or not self._load_queue.empty()
+
+    def snapshot(self) -> Snapshot:
+        """展開して読み込み済みのディレクトリと、その子としてツリーに出ているパス。"""
+        out: Snapshot = {}
+        stack = [self.root]
+        while stack:
+            node = stack.pop()
+            data = node.data
+            if data is None or not data.loaded:
+                continue
+            if node is not self.root and not node.is_expanded:
+                continue
+            out[data.path] = {c.data.path for c in node.children if c.data is not None}
+            stack.extend(c for c in node.children if c.allow_expand)
+        return out
+
+    def differs_from_disk(self, snapshot: Snapshot) -> bool:
+        """snapshot のどれかのディレクトリで、ディスク上の中身が違うか。スレッドから呼ぶ。"""
+        for path, shown in snapshot.items():
+            location = path.expanduser().resolve()
+            try:
+                on_disk = set(self.filter_paths(location.iterdir()))
+            except OSError:
+                # 消えたディレクトリは、親の一覧の食い違いとして拾う
+                continue
+            if on_disk != shown:
+                return True
         return False
 
     def _cursor_to_first_line(self) -> None:
@@ -248,6 +287,32 @@ class ExplorerPanel(Vertical):
     def compose(self) -> ComposeResult:
         yield RootPath(display_path(self.root))
         yield FileTree(self.root, self.show_hidden, self.sort_desc)
+
+    def on_mount(self) -> None:
+        # ほかのプロセス（LLM やシェル）が足したり消したりしたファイルをツリーに反映する
+        self.set_interval(TREE_POLL_INTERVAL, self._poll)
+
+    def _poll(self) -> None:
+        tree = self.tree
+        # 見えていないとき（隠したサイドバー、オーバーレイの下）や読み込み中は何もしない
+        if self.app.screen is not self.screen or tree.region.area == 0:
+            return
+        if tree.is_busy:
+            return
+        self._check_disk(tree.snapshot())
+
+    @work(thread=True, exclusive=True, group="tree-poll", exit_on_error=False)
+    def _check_disk(self, snapshot: Snapshot) -> None:
+        if self.tree.differs_from_disk(snapshot):
+            self.app.call_from_thread(self._reload_if_unchanged, snapshot)
+
+    async def _reload_if_unchanged(self, snapshot: Snapshot) -> None:
+        tree = self.tree
+        # 一覧を取っている間に展開や読み込みがあったら、次の回に任せる
+        if tree.is_busy or tree.snapshot() != snapshot:
+            return
+        # reload は展開状態とカーソル位置を保ったまま読み直す
+        await tree.reload()
 
     @property
     def tree(self) -> FileTree:

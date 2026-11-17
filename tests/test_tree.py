@@ -301,3 +301,65 @@ async def test_directory_names_are_not_bold(root: Path) -> None:
         assert tree.get_component_rich_style(
             "directory-tree--extension", partial=True
         ).italic
+
+
+async def _wait_for(pilot, cond, timeout: float = 3.0) -> bool:
+    for _ in range(int(timeout / 0.1)):
+        if cond():
+            return True
+        await pilot.pause(0.1)
+    return cond()
+
+
+async def test_tree_picks_up_files_changed_on_disk(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        await pilot.press("right")  # sub を展開
+        await pilot.pause(0.3)
+        await pilot.press("down", "down")
+        assert tree.cursor_node.data.path.name == "a.txt"
+
+        (root / "sub" / "new.txt").write_text("n")
+        (root / "b.txt").write_text("b")
+        expected = ["- sub/", "  inner.txt", "  new.txt", "  a.txt", "  b.txt"]
+        assert await _wait_for(pilot, lambda: _labels(tree) == expected)
+        # 展開とカーソルはそのまま
+        assert tree.cursor_node.data.path.name == "a.txt"
+
+        (root / "sub" / "inner.txt").unlink()
+        expected = ["- sub/", "  new.txt", "  a.txt", "  b.txt"]
+        assert await _wait_for(pilot, lambda: _labels(tree) == expected)
+
+
+async def test_tree_does_not_reload_without_changes(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        calls = []
+        original = tree.reload
+        tree.reload = lambda: calls.append(1) or original()
+        await pilot.pause(1.2)
+        assert calls == []
+
+
+async def test_hidden_sidebar_tree_is_not_polled(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        await pilot.press("ctrl+e")  # 隠す
+        await pilot.pause()
+        (root / "b.txt").write_text("b")
+        await pilot.pause(1.2)
+        assert "  b.txt" not in _labels(tree)
+        await pilot.press("ctrl+e")  # また出すと反映される
+        assert await _wait_for(pilot, lambda: "  b.txt" in _labels(tree))
