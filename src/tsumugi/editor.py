@@ -7,7 +7,7 @@ from pathlib import Path
 
 from textual.binding import Binding
 from textual.widgets import TextArea
-from textual.widgets.text_area import Selection
+from textual.widgets.text_area import Document, Selection
 
 _ids = count(1)
 
@@ -68,7 +68,9 @@ class Buffer(TextArea):
             highlight_cursor_line=True,
         )
         self.path = path
-        self.saved_text = text
+        # 改行が混ざったファイルは1種類の改行でつなぎ直されるので、生の text ではなく
+        # self.text と比べる（開いた直後から編集中に見えないように）
+        self.saved_text = self.text
         # 最後に読み書きしたときのディスク上のファイルの状態
         self.disk_sig: tuple[int, int] | None = None
         # 編集中に外で変わったと知らせ済みの状態（同じ変更を何度も知らせないため）
@@ -95,16 +97,24 @@ class Buffer(TextArea):
         if self.path is None:
             raise ValueError("no file name")
         text = self.text
-        self.path.write_text(text, encoding="utf-8")
+        # self.text は開いたときの改行コードでつながっているので、そのまま書く
+        self.path.write_text(text, encoding="utf-8", newline="")
         self.saved_text = text
         self.disk_sig = file_sig(self.path)
         self.notified_sig = _NOT_NOTIFIED
         return self.path
 
     def reload_from_disk(self, text: str, sig: tuple[int, int] | None) -> None:
-        """ディスクから読み直した内容に置き換える。undo で戻せ、カーソルは同じ位置に残す。"""
+        """ディスクから読み直した内容に置き換える。undo で戻せ、カーソルは同じ位置に残す。
+
+        改行コードが変わっていたら、replace では前の改行コードのまま残るので丸ごと読み直す
+        （このときは undo の履歴が消える）。
+        """
         row, col = self.cursor_location
-        self.replace(text, self.document.start, self.document.end)
+        if Document(text).newline != self.document.newline:
+            self.load_text(text)
+        else:
+            self.replace(text, self.document.start, self.document.end)
         row = min(row, self.document.line_count - 1)
         col = min(col, len(self.document.get_line(row)))
         self.move_cursor((row, col))

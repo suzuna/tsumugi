@@ -189,7 +189,8 @@ class EditorScreen(Screen[None]):
         sig = file_sig(path)
         if path.exists():
             try:
-                text = path.read_text(encoding="utf-8")
+                # newline="" で改行コード（LF / CRLF / CR）を変えずに読む
+                text = path.read_text(encoding="utf-8", newline="")
             except UnicodeDecodeError:
                 self.message(f"Cannot open {path.name}: not a UTF-8 text file")
                 return
@@ -351,7 +352,7 @@ class EditorScreen(Screen[None]):
                 self.message(f"{name} changed on disk")
                 continue
             try:
-                text = buf.path.read_text(encoding="utf-8")
+                text = buf.path.read_text(encoding="utf-8", newline="")
             except UnicodeDecodeError:
                 buf.notified_sig = sig
                 self.message(f"Cannot reload {name}: not a UTF-8 text file")

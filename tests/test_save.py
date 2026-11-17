@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from tsumugi.app import TsumugiApp
 from tsumugi.config import Config
 from tsumugi.prompt import PromptInput
@@ -291,3 +293,66 @@ async def test_deleted_file_is_notified_and_can_be_saved_again(tmp_path: Path) -
         await pilot.pause()
         assert not app.editor.infobar.active
         assert f.read_text() == "one"
+
+
+@pytest.mark.parametrize("nl", ["\r\n", "\r", "\n"])
+async def test_save_keeps_newline_style(tmp_path: Path, nl: str) -> None:
+    f = tmp_path / "a.txt"
+    f.write_bytes(f"one{nl}two{nl}".encode())
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert not app.editor.current.dirty
+        await pilot.press("x", "ctrl+s")
+        await pilot.pause()
+        assert f.read_bytes() == f"xone{nl}two{nl}".encode()
+
+
+async def test_mixed_newlines_are_not_dirty_on_open(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_bytes(b"one\r\ntwo\nthree\r\n")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert not app.editor.current.dirty
+
+
+async def test_reload_keeps_crlf(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_bytes(b"one\r\n")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = app.editor.current
+        _rewrite_bytes(f, b"one\r\ntwo\r\n")
+        app.editor._check_disk()
+        await pilot.pause()
+        assert buf.document.newline == "\r\n"
+        await pilot.press("x", "ctrl+s")
+        await pilot.pause()
+        assert f.read_bytes() == b"xone\r\ntwo\r\n"
+
+
+async def test_reload_follows_changed_newline_style(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_bytes(b"one\n")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = app.editor.current
+        _rewrite_bytes(f, b"one\r\ntwo\r\n")
+        app.editor._check_disk()
+        await pilot.pause()
+        assert buf.document.newline == "\r\n"
+        assert not buf.dirty
+        await pilot.press("x", "ctrl+s")
+        await pilot.pause()
+        assert f.read_bytes() == b"xone\r\ntwo\r\n"
+
+
+def _rewrite_bytes(path: Path, data: bytes) -> None:
+    import os
+
+    st = path.stat()
+    path.write_bytes(data)
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
