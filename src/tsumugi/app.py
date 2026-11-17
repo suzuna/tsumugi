@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import os
 import shutil
 import subprocess
@@ -11,17 +13,19 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TextIO
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
 from textual.screen import Screen
-from textual.widgets import ContentSwitcher, DirectoryTree, TextArea
+from textual.widgets import DirectoryTree, TextArea
 
 from .config import Config, load_config
 from .editor import Buffer, file_sig
 from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
 from .help import HelpScreen
+from .panes import Pane
 from .prompt import InfoBar
 from .scrollbar import install as install_scrollbar
 from .statusbar import StatusBar, status_path
@@ -67,9 +71,18 @@ class EditorScreen(Screen[None]):
     EditorScreen #editor-area {
         width: 1fr;
         height: 1fr;
+        layout: horizontal;
     }
-    EditorScreen ContentSwitcher {
-        height: 1fr;
+    /* 上下に分割 */
+    EditorScreen #editor-area.-vertical {
+        layout: vertical;
+    }
+    EditorScreen Pane.-second {
+        border-left: vkey $foreground 30%;
+    }
+    EditorScreen #editor-area.-vertical > Pane.-second {
+        border-left: none;
+        border-top: hkey $foreground 30%;
     }
     EditorScreen Buffer {
         height: 1fr;
@@ -98,13 +111,18 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
         Binding("ctrl+w", "switch_pane", "Switch pane", priority=True),
         Binding("ctrl+o", "open_directory", "Open directory", priority=True),
+        Binding("ctrl+backslash", "toggle_split", "Split", priority=True),
+        Binding("ctrl+right_square_bracket", "move_tab", "Move tab", priority=True),
     ]
 
     def __init__(self, files: list[Path], config: Config) -> None:
         super().__init__()
         self._initial_files = files
         self._config = config
-        self.buffers: list[Buffer] = []
+        # 最後にフォーカスがあったペイン（サイドバーから開くときの開き先）
+        self._active_pane: Pane | None = None
+        # 分割の切り替えやタブの移動を1つずつ順に行うためのロック
+        self._layout_lock = asyncio.Lock()
         self.last_search = ""
         # ステータスバーのパスはここからの相対パスで出す
         self.cwd = Path.cwd().resolve()
@@ -117,9 +135,8 @@ class EditorScreen(Screen[None]):
         with Horizontal(id="main"):
             # サイドバーの中身（ツリー）は最初に表示したときに作る
             yield Vertical(id="sidebar")
-            with Vertical(id="editor-area"):
-                yield TabBar(self._config.hide_single_tab)
-                yield ContentSwitcher()
+            with Container(id="editor-area"):
+                yield Pane(self._config.hide_single_tab)
         yield StatusBar()
         yield InfoBar()
 
@@ -144,11 +161,41 @@ class EditorScreen(Screen[None]):
         return self.query_one(InfoBar)
 
     @property
+    def editor_area(self) -> Container:
+        return self.query_one("#editor-area", Container)
+
+    @property
+    def panes(self) -> list[Pane]:
+        return [w for w in self.editor_area.children if isinstance(w, Pane)]
+
+    @property
+    def active_pane(self) -> Pane:
+        panes = self.panes
+        if self._active_pane in panes:
+            return self._active_pane
+        return panes[0]
+
+    @property
+    def buffers(self) -> list[Buffer]:
+        """全ペインのバッファ（左 / 上のペインから順に）。"""
+        return [b for pane in self.panes for b in pane.buffers]
+
+    @property
     def current(self) -> Buffer | None:
-        switcher = self.query_one(ContentSwitcher)
-        if switcher.current is None:
+        return self.active_pane.current
+
+    def pane_of(self, buf: Buffer) -> Pane:
+        for pane in self.panes:
+            if buf in pane.buffers:
+                return pane
+        raise LookupError(f"{buf!r} is not in any pane")
+
+    @property
+    def split(self) -> str | None:
+        """分割の向き。"horizontal"（左右）/ "vertical"（上下）、分割していなければ None。"""
+        if len(self.panes) < 2:
             return None
-        return switcher.get_child_by_id(switcher.current, Buffer)
+        return "vertical" if self.editor_area.has_class("-vertical") else "horizontal"
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if (
@@ -168,21 +215,33 @@ class EditorScreen(Screen[None]):
         return Buffer(text, path, soft_wrap=self._config.soft_wrap)
 
     async def add_buffer(self, buf: Buffer, focus: bool = True) -> None:
-        self.buffers.append(buf)
-        await self.query_one(ContentSwitcher).mount(buf)
+        """バッファを今のペインのタブの末尾に加えて表示する。"""
+        await self.active_pane.insert(buf)
         self.switch_to(buf, focus)
 
     def switch_to(self, buf: Buffer, focus: bool = True) -> None:
-        self.query_one(ContentSwitcher).current = buf.id
+        """buf のあるペインで buf を表示し、そのペインを今のペインにする。"""
+        pane = self.pane_of(buf)
+        pane.show(buf)
+        self._active_pane = pane
         if focus:
             buf.focus()
         self.refresh_bars()
 
+    def on_descendant_focus(self, event: events.DescendantFocus) -> None:
+        # クリックや Ctrl+W でエディタにフォーカスが来たら、そのペインを今のペインにする
+        for node in event.widget.ancestors_with_self:
+            if isinstance(node, Pane):
+                if node is not self._active_pane:
+                    self._active_pane = node
+                    self.refresh_bars()
+                return
+
     def refresh_bars(self) -> None:
-        buf = self.current
-        labels = [b.display_name + (" +" if b.dirty else "") for b in self.buffers]
-        active = self.buffers.index(buf) if buf in self.buffers else 0
-        self.query_one(TabBar).set_tabs(labels, active)
+        active = self.active_pane
+        for pane in self.panes:
+            pane.refresh_tabs(pane is active)
+        buf = active.current
         if buf is not None:
             row, col = buf.cursor_location
             self.query_one(StatusBar).update_status(
@@ -218,15 +277,13 @@ class EditorScreen(Screen[None]):
         else:
             text = ""  # micro と同じく、存在しないファイルは新規として開く
 
-        cur = self.current
+        pane = self.active_pane
+        cur = pane.current
         new = self._new_buffer(text, path)
         new.disk_sig = sig
         if cur is not None and cur.is_pristine_empty:
             # 空の無題バッファは置き換える
-            index = self.buffers.index(cur)
-            self.buffers[index] = new
-            await self.query_one(ContentSwitcher).mount(new)
-            await cur.remove()
+            await pane.replace(cur, new)
             self.switch_to(new, focus)
         else:
             await self.add_buffer(new, focus)
@@ -234,17 +291,23 @@ class EditorScreen(Screen[None]):
             self.message(f"New file: {path}")
 
     async def close_buffer(self, buf: Buffer) -> None:
-        index = self.buffers.index(buf)
-        self.buffers.remove(buf)
-        await buf.remove()
-        if not self.buffers:
+        pane = self.pane_of(buf)
+        await pane.remove_buffer(buf)
+        if pane.buffers:
+            self.switch_to(pane.current or pane.buffers[0])
+            return
+        if len(self.panes) == 1:
             self.app.exit()
             return
-        self.switch_to(self.buffers[min(index, len(self.buffers) - 1)])
+        # 分割していてペインが空になったら、分割をやめて残ったペインへ
+        await self._close_empty_pane(pane)
+        rest = self.active_pane
+        self.switch_to(rest.current or rest.buffers[0])
 
     def on_tab_bar_clicked(self, event: TabBar.Clicked) -> None:
-        if 0 <= event.index < len(self.buffers):
-            self.switch_to(self.buffers[event.index])
+        pane = event.bar.parent
+        if isinstance(pane, Pane) and 0 <= event.index < len(pane.buffers):
+            self.switch_to(pane.buffers[event.index])
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self.refresh_bars()
@@ -263,7 +326,9 @@ class EditorScreen(Screen[None]):
         """
         target = self.app.focused
         if target is None:
-            callback()
+            result = callback()
+            if inspect.isawaitable(result):
+                self.run_worker(result)
         else:
             target.post_message(AfterInput(callback))
 
@@ -427,11 +492,13 @@ class EditorScreen(Screen[None]):
         await self.add_buffer(self._new_buffer())
 
     def _cycle(self, step: int) -> None:
-        buf = self.current
-        if buf is None or len(self.buffers) < 2:
+        # タブの切り替えは今のペインの中だけ
+        pane = self.active_pane
+        buf = pane.current
+        if buf is None or len(pane.buffers) < 2:
             return
-        index = (self.buffers.index(buf) + step) % len(self.buffers)
-        self.switch_to(self.buffers[index])
+        index = (pane.buffers.index(buf) + step) % len(pane.buffers)
+        self.switch_to(pane.buffers[index])
 
     def action_prev_tab(self) -> None:
         self._cycle(-1)
@@ -498,15 +565,116 @@ class EditorScreen(Screen[None]):
         panel.tree.focus()
 
     def action_switch_pane(self) -> None:
-        if not self.sidebar_visible:
-            return
+        """サイドバー（出ていれば）→ 左 / 上のペイン → 右 / 下のペイン の順にフォーカスを回す。"""
+        targets: list = []
         panel = self._sidebar_panel()
-        if panel is None:
+        if self.sidebar_visible and panel is not None:
+            targets.append(panel.tree)
+        targets += [p.current for p in self.panes if p.current is not None]
+        if len(targets) < 2:
             return
-        if panel.tree.has_focus:
-            self.app.focus_editor()
-        else:
-            panel.tree.focus()
+        focused = self.app.focused
+        index = targets.index(focused) if focused in targets else -1
+        targets[(index + 1) % len(targets)].focus()
+
+    # ---- 分割 ----
+
+    def action_toggle_split(self) -> None:
+        self._after_pending_input(self._toggle_split)
+
+    async def _toggle_split(self) -> None:
+        """分割なし → 左右 → 上下 → 分割なし の順に切り替える。"""
+        async with self._layout_lock:
+            split = self.split
+            if split is None:
+                await self._split_with_current()
+            elif split == "horizontal":
+                self.editor_area.add_class("-vertical")
+            else:
+                await self._unsplit()
+
+    def action_move_tab(self) -> None:
+        self._after_pending_input(self._move_tab)
+
+    async def _move_tab(self) -> None:
+        """今のタブを隣のペインへ移す。分割していなければ左右に分割して移す。"""
+        async with self._layout_lock:
+            buf = self.current
+            if buf is None:
+                return
+            if self.split is None:
+                await self._split_with_current()
+                return
+            src = self.active_pane
+            dst = next(p for p in self.panes if p is not src)
+            await self.move_buffer(buf, dst)
+
+    async def move_buffer(
+        self, buf: Buffer, dst: Pane, index: int | None = None
+    ) -> Buffer:
+        """buf を dst のペインの index の位置（省くと末尾）へ移して表示する。
+
+        移したあとのバッファを返す。元のペインが空になったら分割をやめる。
+        """
+        src = self.pane_of(buf)
+        new = await self._transfer(buf, dst, index)
+        if not src.buffers:
+            await self._close_empty_pane(src)
+        self.switch_to(new)
+        return new
+
+    async def _transfer(
+        self, buf: Buffer, dst: Pane, index: int | None = None
+    ) -> Buffer:
+        """buf を作り直して dst に加え、元のペインから外す（表示とフォーカスは呼ぶ側で）。"""
+        new = buf.moved_copy()
+        await dst.insert(new, index)
+        await self.pane_of(buf).remove_buffer(buf)
+        return new
+
+    async def _split_with_current(self) -> None:
+        """左右に分割して、今のタブを新しいペインへ移す。
+
+        元のペインが空になったら空の無題バッファを開いておく。
+        """
+        buf = self.current
+        if buf is None:
+            return
+        src = self.active_pane
+        dst = Pane(self._config.hide_single_tab)
+        dst.add_class("-second")
+        await self.editor_area.mount(dst)
+        new = await self._transfer(buf, dst)
+        if not src.buffers:
+            empty = self._new_buffer()
+            await src.insert(empty)
+            src.show(empty)
+        self.switch_to(new)
+
+    async def _unsplit(self) -> None:
+        """2つ目のペインのタブを1つ目の後ろにまとめて、分割をやめる。
+
+        空の無題バッファは、ほかにタブがあれば捨てる。フォーカスしていたバッファはそのまま。
+        """
+        first, second = self.panes
+        focused = self.current
+        moved: dict[Buffer, Buffer] = {}
+        for buf in list(second.buffers):
+            moved[buf] = await self._transfer(buf, first)
+        await self._close_empty_pane(second)
+        focused = moved.get(focused, focused) if focused is not None else None
+        for buf in list(first.buffers):
+            if buf.is_pristine_empty and len(first.buffers) > 1:
+                await first.remove_buffer(buf)
+        if focused not in first.buffers:
+            focused = first.current or first.buffers[0]
+        self.switch_to(focused)
+
+    async def _close_empty_pane(self, pane: Pane) -> None:
+        await pane.remove()
+        self.editor_area.remove_class("-vertical")
+        for rest in self.panes:
+            rest.remove_class("-second")
 
     def on_explorer_panel_changed(self, event: ExplorerPanel.Changed) -> None:
         # サイドバーで移動・切替したら、オーバーレイの次回の起点にも反映する
@@ -925,7 +1093,10 @@ class TsumugiApp(App[None], inherit_bindings=False):
 
     def on_after_input(self, message: AfterInput) -> None:
         message.stop()
-        message.callback()
+        result = message.callback()
+        if inspect.isawaitable(result):
+            # 非同期の処理（分割の切り替えなど）は worker で動かす
+            self.editor.run_worker(result)
 
     @property
     def editor(self) -> EditorScreen:

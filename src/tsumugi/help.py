@@ -18,10 +18,17 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Ctrl+O", "Open directory"),
             ("Ctrl+B", "Open file explorer"),
             ("Ctrl+E", "Toggle sidebar tree"),
-            ("Ctrl+W", "Switch sidebar / editor"),
             ("Ctrl+T", "New tab"),
             ("Ctrl+PgUp / PgDn", "Previous / next tab"),
             ("Alt+, / Alt+.", "Previous / next tab (*)"),
+        ],
+    ),
+    (
+        "Split",
+        [
+            ("Ctrl+\\", "Split: off / left-right / top-bottom"),
+            ("Ctrl+]", "Move tab to the other pane"),
+            ("Ctrl+W", "Switch sidebar / panes"),
         ],
     ),
     (

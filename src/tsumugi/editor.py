@@ -122,6 +122,29 @@ class Buffer(TextArea):
         self.disk_sig = sig
         self.notified_sig = _NOT_NOTIFIED
 
+    def moved_copy(self) -> Buffer:
+        """別のペインへ移すための作り直し。中身・保存の状態・undo の履歴・選択範囲を引き継ぐ。
+
+        Textual では mount 済みのウィジェットを別の親へ付け替えられないので、新しく作って
+        元のほうを外す。undo の履歴（Edit）は適用先の TextArea を引数で受け取る作りなので、
+        そのまま渡せる。
+        """
+        new = Buffer(self.text, self.path, soft_wrap=self.soft_wrap)
+        new.saved_text = self.saved_text
+        new.disk_sig = self.disk_sig
+        new.notified_sig = self.notified_sig
+        new.history = self.history
+        new._restore_selection = self.selection
+        return new
+
+    _restore_selection: Selection | None = None
+
+    def on_mount(self) -> None:
+        if self._restore_selection is not None:
+            self.selection = self._restore_selection
+            self._restore_selection = None
+            self.call_after_refresh(self.scroll_cursor_visible)
+
     # ---- micro 固有の動作 ----
 
     def action_noop(self) -> None:

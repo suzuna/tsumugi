@@ -1,0 +1,305 @@
+import os
+from pathlib import Path
+
+from tsumugi.app import EditorScreen, TsumugiApp
+from tsumugi.config import Config
+from tsumugi.editor import Buffer
+from tsumugi.explorer import FileTree
+from tsumugi.tabs import TabBar
+
+
+def make_app(root: Path, *files: Path) -> TsumugiApp:
+    os.chdir(root)
+    return TsumugiApp(list(files), system_clipboard=False, config=Config(sidebar=False))
+
+
+def files(tmp_path: Path, *names: str) -> list[Path]:
+    paths = []
+    for name in names:
+        p = tmp_path / name
+        p.write_text(f"{name}\n")
+        paths.append(p.resolve())
+    return paths
+
+
+def names(pane) -> list[str]:
+    return [b.display_name for b in pane.buffers]
+
+
+async def settle(pilot) -> None:
+    # 分割の切り替えは worker で動くので、終わるまで待つ
+    await pilot.app.workers.wait_for_complete()
+    await pilot.pause()
+
+
+async def test_toggle_split_cycles(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed: EditorScreen = app.editor
+        assert ed.split is None
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        assert ed.split == "horizontal"
+        left, right = ed.panes
+        assert right.region.x > left.region.x
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        assert ed.split == "vertical"
+        top, bottom = ed.panes
+        assert bottom.region.y > top.region.y
+        assert bottom.region.x == top.region.x
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        assert ed.split is None
+        assert len(ed.panes) == 1
+
+
+async def test_split_moves_current_tab(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        assert names(left) == ["a.txt"]
+        assert names(right) == ["b.txt"]
+        assert ed.active_pane is right
+        assert app.focused is right.current
+        assert ed.current.path == b
+
+
+async def test_split_single_tab_opens_untitled(tmp_path: Path) -> None:
+    (a,) = files(tmp_path, "a.txt")
+    app = make_app(tmp_path, a)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        assert names(right) == ["a.txt"]
+        assert len(left.buffers) == 1
+        assert left.buffers[0].is_pristine_empty
+        assert left.current is left.buffers[0]
+
+
+async def test_unsplit_merges_tabs_and_keeps_edits(tmp_path: Path) -> None:
+    a, b, c = files(tmp_path, "a.txt", "b.txt", "c.txt")
+    app = make_app(tmp_path, a, b, c)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        await pilot.press("x")
+        await pilot.press("ctrl+backslash", "ctrl+backslash")
+        await settle(pilot)
+        assert ed.split is None
+        (pane,) = ed.panes
+        assert names(pane) == ["a.txt", "b.txt", "c.txt"]
+        cur = ed.current
+        assert cur.path == c
+        assert cur.text == "xc.txt\n"
+        assert cur.dirty
+        assert app.focused is cur
+
+
+async def test_unsplit_drops_untitled_tab(tmp_path: Path) -> None:
+    (a,) = files(tmp_path, "a.txt")
+    app = make_app(tmp_path, a)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash", "ctrl+backslash", "ctrl+backslash")
+        await settle(pilot)
+        (pane,) = ed.panes
+        assert names(pane) == ["a.txt"]
+
+
+async def test_moved_tab_keeps_undo_and_state(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        old = ed.current
+        await pilot.press("end", "x", "y")
+        sig = old.disk_sig
+        loc = old.cursor_location
+        await pilot.press("ctrl+right_square_bracket")
+        await settle(pilot)
+        new = ed.current
+        assert new is not old
+        assert new.path == b
+        assert new.text == "b.txtxy\n"
+        assert new.dirty
+        assert new.disk_sig == sig
+        assert new.cursor_location == loc
+        assert app.focused is new
+        await pilot.press("ctrl+z")
+        await pilot.pause()
+        assert new.text == "b.txt\n"
+        assert not new.dirty
+
+
+async def test_move_tab_between_panes(tmp_path: Path) -> None:
+    a, b, c = files(tmp_path, "a.txt", "b.txt", "c.txt")
+    app = make_app(tmp_path, a, b, c)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        # 分割していなければ分割して移す
+        await pilot.press("ctrl+right_square_bracket")
+        await settle(pilot)
+        left, right = ed.panes
+        assert names(left) == ["a.txt", "b.txt"]
+        assert names(right) == ["c.txt"]
+        await pilot.press("ctrl+w")  # 左のペインへ
+        await pilot.pause()
+        assert ed.active_pane is left
+        assert ed.current.path == b
+        await pilot.press("ctrl+right_square_bracket")
+        await settle(pilot)
+        assert names(left) == ["a.txt"]
+        assert names(right) == ["c.txt", "b.txt"]
+        assert ed.active_pane is right
+        assert ed.current.path == b
+        # 最後の1枚を移したら分割をやめる
+        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+right_square_bracket")
+        await settle(pilot)
+        assert ed.split is None
+        (pane,) = ed.panes
+        assert names(pane) == ["c.txt", "b.txt", "a.txt"]
+        assert not pane.has_class("-second")
+        assert ed.current.path == a
+
+
+async def test_open_file_in_other_pane_switches_there(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        await ed.open_path(a)
+        await pilot.pause()
+        assert ed.active_pane is left
+        assert app.focused is left.current
+        assert len(ed.buffers) == 2
+
+
+async def test_new_tab_goes_to_active_pane(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        assert names(right) == ["b.txt", "No name"]
+        # タブの切り替えは今のペインの中だけ
+        await pilot.press("ctrl+pageup")
+        assert ed.current.path == b
+        await pilot.press("ctrl+pageup")
+        assert ed.current is right.buffers[1]
+
+
+async def test_sidebar_opens_in_last_active_pane(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    (tmp_path / "c.txt").write_text("cee")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        await pilot.press("ctrl+w")  # 左のペインへ
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = ed.sidebar.query_one(FileTree)
+        tree.move_cursor(tree.root.children[2])
+        await pilot.press("enter")
+        await pilot.pause()
+        assert names(left) == ["a.txt", "c.txt"]
+        assert names(right) == ["b.txt"]
+        assert app.focused is tree
+
+
+async def test_switch_pane_cycles_sidebar_and_panes(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        assert app.focused is right.current
+        # サイドバーが出ていなければ左右だけ
+        await pilot.press("ctrl+w")
+        assert app.focused is left.current
+        await pilot.press("ctrl+w")
+        assert app.focused is right.current
+        await pilot.press("ctrl+e")
+        await pilot.pause()
+        tree = ed.sidebar.query_one(FileTree)
+        assert app.focused is tree
+        await pilot.press("ctrl+w")
+        assert app.focused is left.current
+        await pilot.press("ctrl+w")
+        assert app.focused is right.current
+        await pilot.press("ctrl+w")
+        assert app.focused is tree
+
+
+async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        await pilot.press("ctrl+q")
+        await settle(pilot)
+        assert ed.split is None
+        assert names(ed.panes[0]) == ["a.txt"]
+        assert isinstance(app.focused, Buffer)
+        assert app.focused.path == a
+        assert app.is_running
+
+
+async def test_inactive_pane_tab_is_not_reversed(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+
+        def selected_style(pane):
+            seg = next(
+                s for s in pane.query_one(TabBar).render_line(0) if s.text.strip()
+            )
+            return seg.style
+
+        assert selected_style(right).reverse
+        assert not selected_style(left).reverse
+        assert selected_style(left).underline
+        await pilot.press("ctrl+w")
+        await pilot.pause()
+        assert selected_style(left).reverse
+        assert not selected_style(right).reverse
