@@ -94,6 +94,13 @@ class EditorScreen(Screen[None]):
     EditorScreen #sidebar.-visible {
         display: block;
     }
+    /* ツリーにフォーカスがあるときは、見出しの帯に色を付ける（TabBar.-focused と同じ色）。
+       :focus-within だと中の RootPath のスタイルが描き直されないので、クラスで切り替える */
+    EditorScreen #sidebar.-focused RootPath {
+        background: ansi_bright_black;
+        /* 既定のくすんだ文字色（$text-muted）だとグレーの帯の上で読みにくい */
+        color: ansi_default;
+    }
     EditorScreen #editor-area {
         width: 1fr;
         height: 1fr;
@@ -265,15 +272,22 @@ class EditorScreen(Screen[None]):
         # クリックや Ctrl+W でエディタにフォーカスが来たら、そのペインを今のペインにする
         for node in event.widget.ancestors_with_self:
             if isinstance(node, Pane):
-                if node is not self._active_pane:
-                    self._active_pane = node
-                    self.refresh_bars()
-                return
+                self._active_pane = node
+                break
+        # ツリーとエディタの間でフォーカスが移ったときも、タブバーの色を描き直す
+        self.refresh_bars()
+
+    def _sidebar_focused(self) -> bool:
+        focused = self.focused
+        return focused is not None and self.sidebar in focused.ancestors_with_self
 
     def refresh_bars(self) -> None:
+        # ツリーにフォーカスがある間は、どのペインのタブバーも操作中の色にしない
         active = self.active_pane
+        tree_focused = self._sidebar_focused()
+        self.sidebar.set_class(tree_focused, "-focused")
         for pane in self.panes:
-            pane.refresh_tabs(pane is active)
+            pane.refresh_tabs(pane is active and not tree_focused)
         buf = active.current
         if buf is not None:
             row, col = buf.cursor_location

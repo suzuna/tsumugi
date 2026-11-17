@@ -54,6 +54,42 @@ async def test_focus_tree(tmp_path: Path) -> None:
         assert app.focused is _tree(app)
 
 
+async def test_focus_band_follows_tree_and_editor(tmp_path: Path) -> None:
+    from tsumugi.explorer import RootPath
+
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+
+        def bar_focused() -> bool:
+            return ed.query_one(TabBar).has_class("-focused")
+
+        def root_bgcolor():
+            return ed.sidebar.query_one(RootPath).rich_style.bgcolor
+
+        assert bar_focused()
+        # ツリーにフォーカスがある間は、見出しに色が付いてタブバーは戻る
+        await pilot.press("ctrl+e")
+        await pilot.pause()
+        assert app.focused is _tree(app)
+        assert not bar_focused()
+        assert not root_bgcolor().is_default
+        # エディタへ戻ると逆になる
+        await pilot.press("ctrl+j")
+        await pilot.pause()
+        assert bar_focused()
+        assert root_bgcolor().is_default
+        # ツリーにいる状態でサイドバーを閉じても、タブバーの色は戻る
+        await pilot.press("ctrl+j")
+        await pilot.pause()
+        assert not bar_focused()
+        await pilot.press("ctrl+e")
+        await pilot.pause()
+        assert isinstance(app.focused, Buffer)
+        assert bar_focused()
+
+
 async def test_select_file_opens_tab_and_focuses_it(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("aaa")
     (tmp_path / "b.txt").write_text("bee")
