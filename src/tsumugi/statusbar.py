@@ -10,10 +10,6 @@ from textual.widget import Widget
 
 from .explorer import display_path, truncate_left
 
-HELP_HINT = "Ctrl-g for help "
-# パスがこれより短くしか出せないなら、右端のヘルプの案内を消してパスに回す
-MIN_PATH_WIDTH = 10
-
 
 def status_path(path: Path | None, cwd: Path) -> str:
     """ステータスバーに出すパス。cwd の下なら相対パス、外なら ~/...（ホームの外は絶対パス）。"""
@@ -51,15 +47,9 @@ class StatusBar(Widget):
 
     def render(self) -> Text:
         width = self.size.width
-        fixed = 1 + cell_len(self._info)  # 先頭の空白 + パス以外の左側
-        right = HELP_HINT
-        budget = width - fixed - len(right) - 1
-        if budget < min(cell_len(self._path), MIN_PATH_WIDTH):
-            right = ""
-            budget = width - fixed
+        fixed = 1 + cell_len(self._info)  # 先頭の空白 + パス以外
         # 幅が足りなければパスの頭を … にして、ファイル名や行と列は残す
-        left = " " + truncate_left(self._path, max(budget, 0)) + self._info
-        pad = max(1, width - cell_len(left) - len(right))
-        text = Text(left + " " * pad + right, no_wrap=True)
+        path = truncate_left(self._path, max(width - fixed, 0))
+        text = Text(" " + path + self._info, no_wrap=True)
         text.truncate(width)
         return text
