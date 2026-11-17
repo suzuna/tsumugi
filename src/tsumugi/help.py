@@ -91,6 +91,7 @@ class HelpText(Static):
     DEFAULT_CSS = """
     HelpText > .help--key {
         color: $accent;
+        text-style: bold;
     }
     """
 
