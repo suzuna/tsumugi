@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rich.cells import cell_len
 from rich.text import Text
 from textual import events
 from textual.errors import NoWidget
@@ -66,6 +67,8 @@ class TabBar(Widget):
         self._labels: list[str] = []
         self._active = 0
         self._focused = True
+        # 横にずらしたとき、左端に出す最初のタブの番号
+        self._first = 0
         self._spans: list[tuple[int, int]] = []
         # ドラッグ中のタブの番号
         self._dragging: int | None = None
@@ -74,23 +77,54 @@ class TabBar(Widget):
         self._labels = labels
         self._active = active
         self._focused = focused
+        self._first = min(self._first, max(len(labels) - 1, 0))
         self.display = len(labels) > (1 if self._hide_single else 0)
         self.refresh()
+
+    def _scroll_first(self, widths: list[int], width: int) -> int:
+        """左端に出す最初のタブの番号。選択中のタブが見えるよう、タブ1枚単位でずらす。"""
+        n = len(widths)
+        active = min(max(self._active, 0), n - 1)
+        first = min(self._first, n - 1)
+        if active < first:
+            first = active
+
+        def end_of(i: int) -> int:
+            # first から i 番目のタブの右端まで（タブの間の空白1マスを含む）
+            return sum(widths[first : i + 1]) + (i - first)
+
+        # 選択中のタブが右にはみ出すなら、収まるまで左のタブを隠す
+        while first < active and end_of(active) > width:
+            first += 1
+        # 右が余っているなら、隠れている左のタブを余りの分だけ戻す
+        used = end_of(n - 1)
+        while first > 0 and used + 1 + widths[first - 1] <= width:
+            first -= 1
+            used += 1 + widths[first]
+        return first
 
     def render(self) -> Text:
         text = Text(no_wrap=True, overflow="ellipsis")
         self._spans = []
+        if not self._labels:
+            return text
         active_style = self.get_component_rich_style(
             "tab-bar--active" if self._focused else "tab-bar--unfocused"
         )
-        for i, label in enumerate(self._labels):
-            chunk = f" {label} "
-            start = len(text)
+        chunks = [f" {label} " for label in self._labels]
+        widths = [cell_len(chunk) for chunk in chunks]
+        self._first = self._scroll_first(widths, self.size.width)
+        # _spans は全部のタブについて、表示幅で数えたタブバー上の位置を持つ（左に隠れたタブは負）
+        x = -(sum(widths[: self._first]) + self._first)
+        for i, (chunk, w) in enumerate(zip(chunks, widths)):
+            self._spans.append((x, x + w))
+            x += w + 1
+            if i < self._first:
+                continue
             if i == self._active:
                 text.append(chunk, style=active_style)
             else:
                 text.append(chunk)
-            self._spans.append((start, len(text)))
             text.append(" ")
         return text
 
@@ -98,6 +132,8 @@ class TabBar(Widget):
 
     def tab_at(self, x: int) -> int | None:
         """x の位置にあるタブの番号。タブの上でなければ None。"""
+        if not 0 <= x < self.size.width:
+            return None
         for i, (start, end) in enumerate(self._spans):
             if start <= x < end:
                 return i

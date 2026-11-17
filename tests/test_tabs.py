@@ -23,6 +23,15 @@ def files(tmp_path: Path, *names: str) -> list[Path]:
     return paths
 
 
+def bar_text(pane) -> str:
+    return "".join(seg.text for seg in pane.tab_bar.render_line(0))
+
+
+def tab_x(pane, index: int) -> int:
+    start, end = pane.tab_bar._spans[index]
+    return (start + end) // 2
+
+
 # ---- truncate_middle ----
 
 
@@ -66,3 +75,57 @@ async def test_long_name_is_truncated_to_max(tmp_path: Path) -> None:
         await pilot.pause()
         # 未保存の印は上限の外に付ける
         assert pane.tab_bar._labels[0] == label + " +"
+
+
+# ---- 横スクロール ----
+
+
+async def test_scrolls_to_active_tab(tmp_path: Path) -> None:
+    names = [f"file{i:02}.txt" for i in range(8)]
+    paths = files(tmp_path, *names)
+    app = make_app(tmp_path, *paths)
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        ed.switch_to(pane.buffers[-1])
+        await pilot.pause()
+        text = bar_text(pane)
+        assert "file07.txt" in text
+        assert "file00.txt" not in text
+        # 左端はタブの頭からはじまる
+        assert text.startswith(" file")
+        ed.switch_to(pane.buffers[0])
+        await pilot.pause()
+        assert bar_text(pane).startswith(" file00.txt")
+
+
+async def test_click_after_scroll(tmp_path: Path) -> None:
+    names = [f"file{i:02}.txt" for i in range(8)]
+    paths = files(tmp_path, *names)
+    app = make_app(tmp_path, *paths)
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        ed.switch_to(pane.buffers[-1])
+        await pilot.pause()
+        await pilot.click(pane.tab_bar, offset=(tab_x(pane, 6), 0))
+        await pilot.pause()
+        assert ed.current is pane.buffers[6]
+
+
+async def test_click_wide_char_tab(tmp_path: Path) -> None:
+    paths = files(tmp_path, "日本語のなまえ.txt", "b.txt")
+    app = make_app(tmp_path, *paths)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        ed.switch_to(pane.buffers[0])
+        await pilot.pause()
+        # " 日本語のなまえ.txt " は 20 マス、空白 1 マスのあとの b.txt の頭をクリック
+        assert pane.tab_bar._spans[1][0] == 21
+        await pilot.click(pane.tab_bar, offset=(22, 0))
+        await pilot.pause()
+        assert ed.current.path == paths[1]
