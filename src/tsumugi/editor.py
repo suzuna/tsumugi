@@ -11,6 +11,18 @@ from textual.widgets.text_area import Selection
 
 _ids = count(1)
 
+# notified_sig の初期値（まだ何も知らせていない）
+_NOT_NOTIFIED = object()
+
+
+def file_sig(path: Path) -> tuple[int, int] | None:
+    """ディスク上のファイルの (mtime_ns, size)。なければ None。変わったかの判定に使う。"""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
 
 class Buffer(TextArea):
     """micro 風の操作をする編集バッファ。
@@ -57,6 +69,10 @@ class Buffer(TextArea):
         )
         self.path = path
         self.saved_text = text
+        # 最後に読み書きしたときのディスク上のファイルの状態
+        self.disk_sig: tuple[int, int] | None = None
+        # 編集中に外で変わったと知らせ済みの状態（同じ変更を何度も知らせないため）
+        self.notified_sig: object = _NOT_NOTIFIED
 
     # ---- 状態 ----
 
@@ -81,7 +97,20 @@ class Buffer(TextArea):
         text = self.text
         self.path.write_text(text, encoding="utf-8")
         self.saved_text = text
+        self.disk_sig = file_sig(self.path)
+        self.notified_sig = _NOT_NOTIFIED
         return self.path
+
+    def reload_from_disk(self, text: str, sig: tuple[int, int] | None) -> None:
+        """ディスクから読み直した内容に置き換える。undo で戻せ、カーソルは同じ位置に残す。"""
+        row, col = self.cursor_location
+        self.replace(text, self.document.start, self.document.end)
+        row = min(row, self.document.line_count - 1)
+        col = min(col, len(self.document.get_line(row)))
+        self.move_cursor((row, col))
+        self.saved_text = self.text
+        self.disk_sig = sig
+        self.notified_sig = _NOT_NOTIFIED
 
     # ---- micro 固有の動作 ----
 

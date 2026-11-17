@@ -17,7 +17,7 @@ from textual.screen import Screen
 from textual.widgets import ContentSwitcher, DirectoryTree, TextArea
 
 from .config import Config, load_config
-from .editor import Buffer
+from .editor import Buffer, file_sig
 from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
 from .help import HelpScreen
 from .prompt import InfoBar
@@ -27,6 +27,9 @@ from .tabs import TabBar
 
 # プロンプト入力中でも有効なアクション
 _ALLOWED_WHILE_PROMPTING = {"find_next", "find_prev"}
+
+# 開いているファイルがディスク上で変わっていないか見る間隔（秒）
+DISK_CHECK_INTERVAL = 0.5
 
 
 class EditorScreen(Screen[None]):
@@ -114,6 +117,7 @@ class EditorScreen(Screen[None]):
                 self.app.focus_editor()
         if self._config.warnings:
             self.message(self._config.warnings[0])
+        self.set_interval(DISK_CHECK_INTERVAL, self._check_disk)
 
     # ---- 便利プロパティ ----
 
@@ -181,6 +185,8 @@ class EditorScreen(Screen[None]):
         if path.is_dir():
             self.message(f"{path} is a directory")
             return
+        # 読む前に状態を取る（読んでいる間に変わったら、次の確認で読み直される）
+        sig = file_sig(path)
         if path.exists():
             try:
                 text = path.read_text(encoding="utf-8")
@@ -195,6 +201,7 @@ class EditorScreen(Screen[None]):
 
         cur = self.current
         new = self._new_buffer(text, path)
+        new.disk_sig = sig
         if cur is not None and cur.is_pristine_empty:
             # 空の無題バッファは置き換える
             index = self.buffers.index(cur)
@@ -275,8 +282,16 @@ class EditorScreen(Screen[None]):
             on_cancel=lambda: self.message("Save cancelled"),
         )
 
-    def _do_save(self, buf: Buffer, path: Path | None, then=None) -> None:
+    def _do_save(
+        self, buf: Buffer, path: Path | None, then=None, force: bool = False
+    ) -> None:
         target = path if path is not None else buf.path
+        if not force and target is not None and target == buf.path:
+            # 開いたあとに外で書き換えられていたら、黙って上書きせずに聞く
+            sig = file_sig(target)
+            if sig is not None and sig != buf.disk_sig:
+                self._confirm_overwrite_changed(buf, path, then)
+                return
         created = False
         if target is not None and not target.parent.exists():
             # micro の mkparents と同じ: 設定が on のときだけ足りないフォルダを作る
@@ -298,6 +313,56 @@ class EditorScreen(Screen[None]):
         self.refresh_bars()
         if then is not None:
             self.call_later(then)
+
+    def _confirm_overwrite_changed(
+        self, buf: Buffer, path: Path | None, then=None
+    ) -> None:
+        def on_answer(answer: str) -> None:
+            if answer == "y":
+                self._do_save(buf, path, then, force=True)
+            else:
+                self.message("Save cancelled")
+
+        self.infobar.ask(
+            f"{buf.display_name} changed on disk, overwrite? (y,n,esc) ",
+            on_answer,
+            choices={"y", "n"},
+            on_cancel=lambda: self.message("Save cancelled"),
+        )
+
+    def _check_disk(self) -> None:
+        """開いているファイルがディスク上で変わっていたら、読み直すか知らせる。"""
+        if self.infobar.active:
+            # プロンプト中はメッセージ欄が隠れているので、閉じてから見る
+            return
+        for buf in self.buffers:
+            if buf.path is None:
+                continue
+            sig = file_sig(buf.path)
+            if sig == buf.disk_sig or sig == buf.notified_sig:
+                continue
+            name = buf.display_name
+            if sig is None:
+                buf.notified_sig = sig
+                self.message(f"{name} was deleted on disk")
+                continue
+            if buf.dirty:
+                buf.notified_sig = sig
+                self.message(f"{name} changed on disk")
+                continue
+            try:
+                text = buf.path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                buf.notified_sig = sig
+                self.message(f"Cannot reload {name}: not a UTF-8 text file")
+                continue
+            except OSError as e:
+                buf.notified_sig = sig
+                self.message(f"Cannot reload {name}: {e.strerror}")
+                continue
+            # 置き換えで TextArea.Changed が出るので、タブとステータスバーはそこで更新される
+            buf.reload_from_disk(text, sig)
+            self.message(f"Reloaded {name}")
 
     def action_close_tab(self) -> None:
         buf = self.current

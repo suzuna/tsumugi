@@ -186,3 +186,108 @@ async def test_relative_name_with_new_dir_and_mkparents(tmp_path: Path) -> None:
         await pilot.press("c", "ctrl+s")
         await type_filename(pilot, app, "20261117-test/index.qmd")
         assert (tmp_path / "20261117-test" / "index.qmd").read_text() == "c"
+
+
+def _rewrite(path: Path, text: str) -> None:
+    """外のプロセスが書き換えたことにする。mtime の粒度に頼らないよう時刻も進める。"""
+    import os
+
+    st = path.stat()
+    path.write_text(text)
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+
+
+async def test_unedited_buffer_reloads_when_changed_on_disk(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one\ntwo\n")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = app.editor.current
+        buf.move_cursor((1, 2))
+        _rewrite(f, "one\nTWO!\nthree\n")
+        app.editor._check_disk()
+        await pilot.pause()
+        assert buf.text == "one\nTWO!\nthree\n"
+        assert not buf.dirty
+        assert buf.cursor_location == (1, 2)
+        assert message(app) == "Reloaded a.txt"
+
+
+async def test_dirty_buffer_is_not_reloaded_and_notified_once(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = app.editor.current
+        await pilot.press("x")
+        _rewrite(f, "from llm")
+        app.editor._check_disk()
+        assert buf.text == "xone"
+        assert message(app) == "a.txt changed on disk"
+        # 同じ変更は2回知らせない
+        app.editor.message("")
+        app.editor._check_disk()
+        assert message(app) == ""
+
+
+async def test_save_asks_before_overwriting_changed_file(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("x")
+        _rewrite(f, "from llm")
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        assert app.editor.infobar.active
+        assert "changed on disk" in str(
+            app.editor.infobar.query_one("#prompt-label").render()
+        )
+        await pilot.press("n")
+        await pilot.pause()
+        assert f.read_text() == "from llm"
+        assert "cancelled" in message(app)
+        assert app.editor.current.dirty
+
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        assert f.read_text() == "xone"
+        assert not app.editor.current.dirty
+        # 保存したあとは、もう聞かない
+        await pilot.press("y", "ctrl+s")
+        await pilot.pause()
+        assert not app.editor.infobar.active
+        assert f.read_text() == "xyone"
+
+
+async def test_save_without_external_change_does_not_ask(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("x", "ctrl+s")
+        await pilot.pause()
+        assert not app.editor.infobar.active
+        assert f.read_text() == "xone"
+
+
+async def test_deleted_file_is_notified_and_can_be_saved_again(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("one")
+    app = make_app(tmp_path, f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        f.unlink()
+        app.editor._check_disk()
+        assert message(app) == "a.txt was deleted on disk"
+        assert app.editor.current.text == "one"
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        assert not app.editor.infobar.active
+        assert f.read_text() == "one"
