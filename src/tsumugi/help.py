@@ -64,6 +64,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Left", "Collapse directory / go to parent"),
             ("o", "Open directory under cursor"),
             ("g", "Go to directory / file (overlay)"),
+            ("/", "Jump to name (type the beginning)"),
             ("Backspace", "Open parent directory"),
             (".", "Toggle hidden files"),
             ("s", "Toggle name order (asc / desc)"),

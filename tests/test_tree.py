@@ -502,3 +502,135 @@ async def test_file_ops_disabled_in_overlay(root: Path) -> None:
         await pilot.press("m")
         await pilot.pause()
         assert not app.editor.infobar.active
+
+
+@pytest.fixture
+def jumpable(tmp_path: Path) -> Path:
+    # 並びはディレクトリが先: docs/, src/, readme-ja.md, README.md, setup.py, style.css
+    # （名前は小文字にして比べるので、- が . より先に来る）
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("x")
+    for name in ["README.md", "readme-ja.md", "setup.py", "style.css"]:
+        (tmp_path / name).write_text("x")
+    return tmp_path
+
+
+async def _sidebar_tree(pilot, app) -> FileTree:
+    await pilot.pause()
+    await pilot.press("ctrl+e")
+    await pilot.pause(0.3)
+    return app.editor.sidebar.query_one(FileTree)
+
+
+def _cursor_name(tree: FileTree) -> str:
+    return tree.cursor_node.data.path.name
+
+
+async def test_slash_jumps_by_prefix(jumpable: Path) -> None:
+    from tsumugi.explorer import RootPath, truncate_left
+
+    app = await _open_sidebar(jumpable)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        label = app.editor.sidebar.query_one(RootPath)
+        await pilot.press("slash", "s", "e")
+        await pilot.pause()
+        assert _cursor_name(tree) == "setup.py"
+        assert label.render().plain == "/se"
+        # 大文字小文字は区別しない
+        await pilot.press("backspace", "backspace", "R", "E", "A", "D", "M", "E", "-")
+        await pilot.pause()
+        assert _cursor_name(tree) == "readme-ja.md"
+        # 一致しなければ動かない
+        await pilot.press("z")
+        await pilot.pause()
+        assert _cursor_name(tree) == "readme-ja.md"
+        # Enter で検索をやめるだけで、ファイルは開かない
+        await pilot.press("enter")
+        await pilot.pause()
+        assert tree.search is None
+        assert app.focused is tree
+        assert app.editor.current.path is None
+        # パスの表示に戻る
+        assert label.render().plain == truncate_left(label.text, label.size.width)
+
+
+async def test_slash_repeated_char_cycles_and_wraps(jumpable: Path) -> None:
+    app = await _open_sidebar(jumpable)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        await pilot.press("slash", "s")
+        await pilot.pause()
+        assert _cursor_name(tree) == "src"
+        await pilot.press("s")
+        assert _cursor_name(tree) == "setup.py"
+        await pilot.press("s")
+        assert _cursor_name(tree) == "style.css"
+        # 末尾まで行ったら先頭から回り込む
+        await pilot.press("s")
+        assert _cursor_name(tree) == "src"
+
+
+async def test_slash_searches_visible_lines_only(jumpable: Path) -> None:
+    app = await _open_sidebar(jumpable)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        # 閉じた src/ の中の main.py には飛ばない
+        await pilot.press("slash", "m")
+        await pilot.pause()
+        assert _cursor_name(tree) == "docs"
+        await pilot.press("escape", "slash", "s", "right")
+        await pilot.pause(0.3)
+        # 矢印を押したら検索をやめて、ふつうに効く
+        assert tree.search is None
+        assert tree.cursor_node.is_expanded
+        await pilot.press("slash", "m")
+        await pilot.pause()
+        assert _cursor_name(tree) == "main.py"
+
+
+async def test_tree_keys_do_nothing_while_searching(jumpable: Path) -> None:
+    app = await _open_sidebar(jumpable)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        ed = app.editor
+        await pilot.press("slash", "s", "o", "s", "full_stop", "d", "m", "r")
+        await pilot.pause()
+        # o で起点が変わらず、. で隠しファイルの表示も、s で並び順も変わらない
+        assert ed.explorer_root == jumpable
+        assert not tree.show_hidden
+        assert not tree.sort_desc
+        # d / m / r の入力欄も出ない
+        assert not ed.infobar.active
+        assert tree.search == "sos.dmr"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert tree.search is None
+        assert app.focused is tree
+
+
+async def test_slash_in_overlay(jumpable: Path) -> None:
+    app = await _open_sidebar(jumpable)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        tree = app.screen.query_one(FileTree)
+        box = app.screen.query_one("#explorer-box")
+        assert "/: jump" in box.border_subtitle
+        await pilot.press("slash", "g", "o")
+        await pilot.pause()
+        assert "Enter/Esc: done" in box.border_subtitle
+        # g も o も効かず、オーバーレイも開いたまま
+        assert tree.search == "go"
+        # Esc は検索をやめるだけで、オーバーレイは閉じない
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.query_one(FileTree) is tree
+        assert "/: jump" in box.border_subtitle
+        await pilot.press("slash", "r", "e", "a", "d", "m", "e", "full_stop")
+        await pilot.press("enter", "enter")
+        await pilot.pause(0.3)
+        # 検索をやめたあとの Enter で開く
+        assert app.editor.current.path == jumpable / "README.md"

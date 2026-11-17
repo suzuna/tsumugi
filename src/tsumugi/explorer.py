@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.cells import cell_len
 from rich.style import Style
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -60,7 +60,20 @@ class FileTree(DirectoryTree):
     BINDINGS = [
         Binding("right", "expand_node", "Expand", show=False),
         Binding("left", "collapse_or_parent", "Collapse", show=False),
+        Binding("slash", "start_search", "Jump to name", show=False),
     ]
+
+    class SearchChanged(Message):
+        """前方一致ジャンプの入力が変わった。query が None なら検索をやめた。"""
+
+        def __init__(self, tree: FileTree, query: str | None) -> None:
+            super().__init__()
+            self.tree = tree
+            self.query = query
+
+        @property
+        def control(self) -> FileTree:
+            return self.tree
 
     def __init__(
         self, path: Path, show_hidden: bool = False, sort_desc: bool = False
@@ -71,6 +84,8 @@ class FileTree(DirectoryTree):
         self.show_root = False
         self.show_guides = False
         self.guide_depth = 2
+        # 前方一致ジャンプ（/）で打った文字列。検索していなければ None
+        self.search: str | None = None
 
     def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
         if self.show_hidden:
@@ -193,6 +208,91 @@ class FileTree(DirectoryTree):
             )
         return Text.assemble(prefix, label)
 
+    # ---- 前方一致ジャンプ ----
+
+    def action_start_search(self) -> None:
+        self._set_search("")
+
+    def end_search(self) -> None:
+        if self.search is not None:
+            self._set_search(None)
+
+    def _set_search(self, query: str | None) -> None:
+        self.search = query
+        self.post_message(self.SearchChanged(self, query))
+
+    def _visible_nodes(self) -> list[TreeNode[DirEntry]]:
+        """ツリーに今出ている行のノードを上から順に。"""
+        out: list[TreeNode[DirEntry]] = []
+        stack = list(reversed(self.root.children))
+        while stack:
+            node = stack.pop()
+            out.append(node)
+            if node.is_expanded:
+                stack.extend(reversed(node.children))
+        return out
+
+    def _jump(self, prefix: str, skip_current: bool) -> bool:
+        """名前が prefix で始まる行へカーソルを移す。大文字小文字は区別しない。
+
+        カーソルの行（skip_current なら次の行）から下へ探し、なければ先頭から回り込む。
+        見つからなければ動かさずに False。
+        """
+        nodes = self._visible_nodes()
+        if not nodes:
+            return False
+        cursor = self.cursor_node
+        start = nodes.index(cursor) if cursor in nodes else 0
+        if skip_current:
+            start += 1
+        prefix = prefix.casefold()
+        for i in range(len(nodes)):
+            node = nodes[(start + i) % len(nodes)]
+            if node.data is not None and node.data.path.name.casefold().startswith(
+                prefix
+            ):
+                self.move_cursor(node)
+                return True
+        return False
+
+    def _search_type(self, char: str) -> None:
+        assert self.search is not None
+        query = self.search + char
+        self._set_search(query)
+        if len(query) > 1 and len(set(query)) == 1:
+            # 同じ文字の連打は、その文字で始まる次の行へ
+            self._jump(char, skip_current=True)
+        else:
+            self._jump(query, skip_current=False)
+
+    def _search_backspace(self) -> None:
+        assert self.search is not None
+        query = self.search[:-1]
+        self._set_search(query)
+        if query:
+            self._jump(query, skip_current=False)
+
+    def on_key(self, event: events.Key) -> None:
+        # 検索中は、打った文字をツリーのキー（o / s / d など）より先に受け取る。
+        # 止めたキーは画面やパネルの Binding まで届かない
+        if self.search is None:
+            return
+        if event.key in ("enter", "escape"):
+            self.end_search()
+        elif event.key == "backspace":
+            self._search_backspace()
+        elif event.is_printable and event.character is not None:
+            self._search_type(event.character)
+        else:
+            # 矢印などはふつうに効かせて、検索はやめる
+            self.end_search()
+            return
+        event.stop()
+        event.prevent_default()
+
+    def on_blur(self) -> None:
+        self.end_search()
+
     def action_expand_node(self) -> None:
         node = self.cursor_node
         if node is not None and node.allow_expand and not node.is_expanded:
@@ -303,6 +403,7 @@ class RootPath(Widget):
     def __init__(self, text: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self._text = text
+        self._search: str | None = None
 
     @property
     def text(self) -> str:
@@ -312,7 +413,17 @@ class RootPath(Widget):
         self._text = text
         self.refresh()
 
+    def set_search(self, query: str | None) -> None:
+        """前方一致ジャンプの入力中は、パスの代わりに `/query` を出す。"""
+        self._search = query
+        self.refresh()
+
     def render(self) -> Text:
+        if self._search is not None:
+            # 打った文字列は後ろが見えるよう前を削る
+            return Text(
+                truncate_left("/" + self._search, self.size.width), no_wrap=True
+            )
         return Text(truncate_left(self._text, self.size.width), no_wrap=True)
 
 
@@ -408,6 +519,10 @@ class ExplorerPanel(Vertical):
         self.query_one(RootPath).set_path(display_path(root))
         self.post_message(self.Changed(self))
 
+    def on_file_tree_search_changed(self, event: FileTree.SearchChanged) -> None:
+        # オーバーレイの案内も切り替えるので止めない
+        self.query_one(RootPath).set_search(event.query)
+
     def action_parent(self) -> None:
         parent = self.root.parent
         if parent != self.root:
@@ -454,11 +569,13 @@ class ExplorerPanel(Vertical):
         self.post_message(self.Changed(self))
 
 
-# オーバーレイの枠の下に出す案内。g の入力中は入力欄の操作に替える
+# オーバーレイの枠の下に出す案内。g の入力中は入力欄の操作に、/ の入力中は検索の操作に替える
 EXPLORER_HINT = (
-    "Enter: open/expand  o: cd  g: go to  BS: parent  .: hidden  s: sort  Esc: close"
+    "Enter: open/expand  o: cd  g: go to  /: jump  BS: parent  .: hidden  s: sort"
+    "  Esc: close"
 )
 GOTO_HINT = "Enter: open  Esc: back to tree"
+SEARCH_HINT = "Type: jump to name  BS: delete  Enter/Esc: done"
 
 
 class GoToInput(Input):
@@ -639,6 +756,10 @@ class ExplorerScreen(ModalScreen[Path | None]):
 
     def action_go_to(self) -> None:
         self.query_one(GoToBar).show(display_path(self.root).rstrip("/") + "/")
+
+    def on_file_tree_search_changed(self, event: FileTree.SearchChanged) -> None:
+        box = self.query_one("#explorer-box")
+        box.border_subtitle = EXPLORER_HINT if event.query is None else SEARCH_HINT
 
     def on_directory_tree_file_selected(
         self, event: DirectoryTree.FileSelected
