@@ -1,6 +1,11 @@
 # tsumugi
 
-micro 風の操作感で使える、ターミナル用の小さなテキストエディタ。Ctrl+B でオーバーレイのファイルツリーを開いて、そこからファイルを選べる。
+micro 風の操作感で使える、ターミナル用の小さなテキストエディタ。
+
+## 特徴
+
+- micro の操作感のうち、よく使う機能だけを Textual で再実装している
+- micro の設定やプラグインではやりにくい部分（見た目やファイルツリー周りなど）を、好みに合わせて作り込める
 
 ## インストール
 
@@ -22,29 +27,25 @@ tsumugi a.txt b.txt  # 複数ファイルをタブで開く
 
 ## キーバインド
 
-| キー | 動作 |
-|---|---|
-| Ctrl+S | 保存。無題ならファイル名を聞く。相対パスはツリーで最後に見ていたフォルダが基準（プロンプトに表示）。すでにあるファイルなら上書きを確認 |
-| Ctrl+Q | タブを閉じる（未保存なら確認）。最後のタブなら終了 |
-| Ctrl+B | ファイルエクスプローラ（オーバーレイ）を開く |
-| Ctrl+E | サイドバーのツリーを表示 / 非表示 |
-| Ctrl+W | サイドバーとエディタの間でフォーカスを移動 |
-| Ctrl+T | 新規タブ |
-| Ctrl+PgUp / Ctrl+PgDn | 前 / 次のタブ（タブバーのクリックでも切替） |
-| Alt+, / Alt+. | 前 / 次のタブ（kitty keyboard protocol 対応ターミナルで `TEXTUAL_DISABLE_KITTY_KEY=0` を付けて起動したときのみ） |
-| Ctrl+Z / Ctrl+Y | undo / redo |
-| Ctrl+C / Ctrl+X | コピー / カット（選択なしなら行単位） |
-| Ctrl+V | ペースト |
-| Ctrl+K | 行カット |
-| Ctrl+D | 行（または選択範囲）の複製 |
-| Alt+Up / Alt+Down | 行の移動 |
-| Ctrl+A | 全選択 |
-| Shift+矢印 / マウスドラッグ | 選択 |
-| Ctrl+F | 検索（入力しながらインクリメンタルに移動、Enter で確定） |
-| Ctrl+N / Ctrl+P | 次 / 前を検索 |
-| Ctrl+G | ヘルプ |
+基本は micro と同じ。全部のキーは Ctrl+G のヘルプで見られる。micro と違うのはこれだけ。
 
-kitty keyboard protocol は既定でオフにしている。iTerm2 などでは IME の確定が kitty の形式で届き、Textual が改行として扱ったり、長い文字列だと制御文字がそのまま入力されたりして、日本語が入力できないため。
+| キー | tsumugi | micro |
+|---|---|---|
+| Ctrl+B | ファイルエクスプローラ（オーバーレイ） | シェル実行 |
+| Ctrl+E | サイドバーのツリーを表示 / 非表示 | コマンドバー |
+| Ctrl+W | サイドバーとエディタの間でフォーカスを移動 | 分割の移動 |
+| Ctrl+PgUp / Ctrl+PgDn | 前 / 次のタブ | なし |
+| Alt+, / Alt+. | 前 / 次のタブ。ただし kitty keyboard protocol 対応ターミナルで `TEXTUAL_DISABLE_KITTY_KEY=0` を付けて起動したときだけ | 前 / 次のタブ |
+
+ほかの違い。
+
+- シンタックスハイライト、分割表示、コマンドバー、プラグイン、マクロ、マルチカーソルはない
+- Ctrl+O（ファイルを開く）、Ctrl+L（行ジャンプ）、Ctrl+R（行番号の切替）は割り当てていない
+- 検索は大文字小文字を区別する部分一致（正規表現なし）
+- 無題のバッファを保存するとき、相対パスはツリーで最後に見ていたフォルダが基準になる
+- 開けるのは UTF-8 のテキストファイルだけ
+
+kitty keyboard protocol は既定でオフにしている。iTerm2 などでは IME の確定が kitty の形式で届き、日本語が入力できなくなるため。
 
 ### エクスプローラ
 
@@ -58,39 +59,32 @@ kitty keyboard protocol は既定でオフにしている。iTerm2 などでは 
   README.md
 ```
 
-ツリーは2通りで出せる。
-
-- Ctrl+B: 画面中央にオーバーレイで出る。ファイルを選ぶと閉じてエディタへ戻る
-- Ctrl+E: 画面左の列（サイドバー）に出る。ファイルを選ぶとタブで開き、フォーカスはツリーに残る。Ctrl+W でエディタと行き来する
-
-どちらも最初は設定の `explorer_root`（既定は `~`）を起点に開き、以降は最後にいたディレクトリから開く（両者で共有）。ファイルを選ぶと新しいタブで開く。ただし空の無題バッファは置き換え、すでに開いているファイルならそのタブに切り替える。
+Ctrl+B では画面中央にオーバーレイで出て、ファイルを選ぶと閉じる。Ctrl+E では左の列に出て、ファイルを選んでもフォーカスはツリーに残る。どちらも最後にいたディレクトリから開き、選んだファイルは新しいタブで開く（空の無題バッファは置き換え、開いているファイルならそのタブへ切り替え）。
 
 | キー | 動作 |
 |---|---|
-| 矢印 | 移動 |
 | Enter / クリック | ファイルを開く・ディレクトリを展開 |
-| → | ディレクトリを展開 |
-| ← | 開いたディレクトリを閉じる。ファイルや閉じたディレクトリの上なら親ディレクトリへカーソル移動 |
+| → / ← | ディレクトリを展開 / 閉じる（閉じたものの上なら親へカーソル移動） |
 | Backspace | 親ディレクトリへ |
 | . | 隠しファイルの表示切替 |
-| s | 名前の昇順 / 降順を切り替え（ディレクトリが先なのは変わらない） |
+| s | 名前の昇順 / 降順を切り替え |
 | Esc / Ctrl+B | 閉じる（オーバーレイのみ） |
 
 ## 設定
 
-`~/.config/tsumugi/config.toml`（`XDG_CONFIG_HOME` が設定されていれば `$XDG_CONFIG_HOME/tsumugi/config.toml`）に書く。
+`~/.config/tsumugi/config.toml`（`XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/tsumugi/config.toml`）に書く。読めないときは既定値で起動し、下段に警告を出す。
 
 ```toml
-# エクスプローラを最初に開くディレクトリ（既定は ~）
+# エクスプローラを最初に開くディレクトリ（既定は ~。相対パスはホーム基準）
 explorer_root = "~/repos"
 
 # 起動時にサイドバーのツリーを開く（既定は false）
 sidebar = true
 
-# ツリーの名前順 "asc"（昇順）/ "desc"（降順）。既定は "asc"。起動後は s で切り替えられる
+# ツリーの名前順 "asc" / "desc"（既定は "asc"）
 tree_sort = "desc"
 
-# 長い行を右端で折り返す（既定は false）。折り返した続きの行には行番号を付けない
+# 長い行を右端で折り返す（既定は false）
 soft_wrap = true
 
 # 見た目のカスタム CSS（Textual CSS）
@@ -100,55 +94,19 @@ css = "style.tcss"
 mkparents = true
 ```
 
-- `sidebar = true` のとき、ファイルを指定して起動したらエディタに、ファイルなしで起動したらツリーにフォーカスする
-
-- `explorer_root` の `~` は展開される。相対パスはホームディレクトリ基準
-- ディレクトリが存在しない、TOML が壊れているなどの場合は `~` で開き、起動時に下段へ警告を出す
-
 ### カスタム CSS
 
-`css` に Textual CSS（`.tcss`）のパスを書くと、tsumugi の既定の見た目より優先して読み込む。`~` は展開され、相対パスは設定ファイルと同じディレクトリから探す。ファイルがなければ警告を出して無視する。CSS の書き方が間違っていると、起動時に Textual がエラーを出して止まる。
+`css` に Textual CSS（`.tcss`）のパスを書くと、既定の見た目より優先して読み込む。相対パスは設定ファイルと同じディレクトリから探す。
 
 主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。
 
-例: 背景を紫、下のバー・区切り線・スクロールバーをピンクにする
-
 ```css
-EditorScreen,
-EditorScreen Buffer,
-ExplorerScreen > ExplorerPanel,
-HelpScreen > VerticalScroll {
-    background: #180b33;
-}
-
 StatusBar {
     text-style: none;
     background: #ea7599;
     color: #ffffff;
 }
-
-EditorScreen #sidebar {
-    border-right: vkey #ea7599;
-}
-
-* {
-    scrollbar-color: #ea7599;
-    scrollbar-color-hover: #ea7599;
-    scrollbar-color-active: #ea7599;
-    scrollbar-background: #180b33;
-    scrollbar-background-hover: #180b33;
-    scrollbar-background-active: #180b33;
-    scrollbar-corner-color: #180b33;
-}
 ```
-
-## micro との違い
-
-- シンタックスハイライト、分割表示、コマンドバー（Ctrl+E）、プラグインはない
-- Ctrl+B は micro ではシェル実行だけど、tsumugi ではエクスプローラ
-- Ctrl+E は micro ではコマンドバーだけど、tsumugi ではサイドバー。Ctrl+W は micro の分割移動と同じ感覚でサイドバーとエディタを行き来する
-- 検索は大文字小文字を区別する部分一致（正規表現なし）
-- 開けるのは UTF-8 のテキストファイルだけ
 
 ## 開発
 
