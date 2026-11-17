@@ -34,22 +34,27 @@ class StatusBar(Widget):
     def __init__(self) -> None:
         super().__init__()
         self._path = ""
-        self._info = ""
+        self._mark = ""
+        self._right = ""
 
     def update_status(
         self, path: str, dirty: bool, row: int, col: int, newline: str
     ) -> None:
-        mark = " +" if dirty else ""
         eol = "dos" if newline == "\r\n" else "unix"
         self._path = path
-        self._info = f"{mark} ({row + 1},{col + 1}) | {eol} | utf-8"
+        self._mark = " +" if dirty else ""
+        # 左の先頭の空白とそろうよう、右端にも空白を1つ置く
+        self._right = f"({row + 1},{col + 1}) | {eol} | utf-8 "
         self.refresh()
 
     def render(self) -> Text:
+        # パスと編集中の印は左、行と列・改行コード・文字コードは右端に寄せる
         width = self.size.width
-        fixed = 1 + cell_len(self._info)  # 先頭の空白 + パス以外
-        # 幅が足りなければパスの頭を … にして、ファイル名や行と列は残す
-        path = truncate_left(self._path, max(width - fixed, 0))
-        text = Text(" " + path + self._info, no_wrap=True)
+        # 先頭の空白 + 印 + 右側 + 左右の間の最低1マス を除いた幅がパスに使える
+        budget = width - 1 - cell_len(self._mark) - cell_len(self._right) - 1
+        # 幅が足りなければパスの頭を … にして、ファイル名と右側は残す
+        left = " " + truncate_left(self._path, max(budget, 0)) + self._mark
+        pad = max(1, width - cell_len(left) - cell_len(self._right))
+        text = Text(left + " " * pad + self._right, no_wrap=True)
         text.truncate(width)
         return text

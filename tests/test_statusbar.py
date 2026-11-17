@@ -33,9 +33,13 @@ async def test_status_bar_shows_relative_path(
     f.write_text("x")
     monkeypatch.chdir(tmp_path)
     app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(80, 10)) as pilot:
         await pilot.pause()
-        assert _bar_text(app).startswith(" content/posts/a.md (1,1)")
+        text = _bar_text(app)
+        # パスは左、行と列・改行コード・文字コードは右端
+        assert text.startswith(" content/posts/a.md ")
+        assert text.endswith("  (1,1) | unix | utf-8 ")
+        assert len(text) == 80
 
 
 async def test_long_path_is_truncated_from_head(
@@ -49,10 +53,27 @@ async def test_long_path_is_truncated_from_head(
     async with app.run_test(size=(60, 10)) as pilot:
         await pilot.pause()
         text = _bar_text(app)
-        # 幅いっぱいまでパスに使い、頭が … になり、ファイル名と行と列は残る
+        # 幅いっぱいまでパスに使い、頭が … になり、ファイル名と右側は残る
         assert len(text) == 60
         assert text.startswith(" …")
-        assert text.endswith("/a.md (1,1) | unix | utf-8")
+        assert text.endswith("/a.md (1,1) | unix | utf-8 ")
+
+
+async def test_dirty_mark_is_kept_when_path_is_truncated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / ("d" * 60) / "a.md"
+    f.parent.mkdir()
+    f.write_text("x")
+    monkeypatch.chdir(tmp_path)
+    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    async with app.run_test(size=(60, 10)) as pilot:
+        await pilot.pause()
+        await pilot.press("y")
+        text = _bar_text(app)
+        assert len(text) == 60
+        assert text.startswith(" …")
+        assert text.endswith("/a.md + (1,2) | unix | utf-8 ")
 
 
 async def test_status_bar_has_no_help_hint(tmp_path: Path) -> None:
