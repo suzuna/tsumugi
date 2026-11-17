@@ -365,11 +365,16 @@ class ExplorerPanel(Vertical):
             self.set_root(parent)
 
     def action_enter_dir(self) -> None:
-        """カーソルのディレクトリを起点にする（Backspace の逆）。ファイルの上では何もしない。"""
+        """カーソルのディレクトリを起点にする（Backspace の逆）。ファイルの上では何もしない。
+
+        オーバーレイではそのまま閉じて、メイン画面をそのディレクトリで開く。
+        """
         node = self.tree.cursor_node
         if node is None or node.data is None or not node.allow_expand:
             return
         self.set_root(node.data.path)
+        if isinstance(self.screen, ExplorerScreen):
+            self.screen.dismiss(None)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         # オーバーレイにはインフォバーがないので、ファイル操作はサイドバーだけ
@@ -437,7 +442,7 @@ class ExplorerScreen(ModalScreen[Path | None]):
         )
         panel.border_title = "Explorer"
         panel.border_subtitle = (
-            "Enter: open  o: open dir  BS: parent  .: hidden  s: sort  Esc: close"
+            "Enter: open/expand  o: cd  BS: parent  .: hidden  s: sort  Esc: close"
         )
         yield panel
 

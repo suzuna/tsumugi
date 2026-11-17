@@ -195,11 +195,24 @@ async def test_overlay_o_opens_directory_under_cursor(root: Path) -> None:
         assert app.screen.query_one(FileTree).select_path(root / "proj")
         await pilot.press("o")
         await pilot.pause()
-        assert app.screen.root == root / "proj"
-        await pilot.press("escape")
-        await pilot.pause()
+        # o だけで閉じて、メイン画面がそのディレクトリになる
+        assert not isinstance(app.screen, ExplorerScreen)
         assert app.editor.explorer_root == root / "proj"
         assert Path.cwd() == root / "proj"
+
+
+async def test_overlay_o_on_file_keeps_overlay(root: Path) -> None:
+    app = make_app(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        assert app.screen.query_one(FileTree).select_path(root / "b.txt")
+        await pilot.press("o")
+        await pilot.pause()
+        assert isinstance(app.screen, ExplorerScreen)
+        assert app.screen.root == root
+        assert Path.cwd() == root
 
 
 async def test_overlay_backspace_changes_cwd(root: Path) -> None:
