@@ -241,6 +241,39 @@ def truncate_left(text: str, width: int) -> str:
     return ELLIPSIS + "".join(reversed(kept))
 
 
+def truncate_middle(text: str, width: int) -> str:
+    """表示幅 width に収まるよう真ん中を削り、そこに … を置く。収まればそのまま。
+
+    端数は後ろに回して、拡張子が残りやすいようにする。
+    """
+    if cell_len(text) <= width:
+        return text
+    if width <= 0:
+        return ""
+    if width == 1:
+        return ELLIPSIS
+    budget = width - cell_len(ELLIPSIS)
+    head_budget = budget // 2
+    tail_budget = budget - head_budget
+    head: list[str] = []
+    used = 0
+    for ch in text:
+        w = cell_len(ch)
+        if used + w > head_budget:
+            break
+        head.append(ch)
+        used += w
+    tail: list[str] = []
+    used = 0
+    for ch in reversed(text):
+        w = cell_len(ch)
+        if used + w > tail_budget:
+            break
+        tail.append(ch)
+        used += w
+    return "".join(head) + ELLIPSIS + "".join(reversed(tail))
+
+
 class RootPath(Widget):
     """ツリーの起点のパス。幅に収まらなければ前を省略して1行で出す。"""
 

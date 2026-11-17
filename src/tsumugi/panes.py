@@ -11,7 +11,11 @@ from textual.css.query import NoMatches
 from textual.widgets import ContentSwitcher
 
 from .editor import Buffer
+from .explorer import truncate_middle
 from .tabs import TabBar
+
+# タブに出すファイル名の最大の表示幅（未保存の印 " +" は含めない）
+TAB_NAME_MAX = 20
 
 
 class Pane(Vertical):
@@ -88,6 +92,9 @@ class Pane(Vertical):
     def refresh_tabs(self, active: bool) -> None:
         """タブバーを描き直す。active はこのペインが今操作しているペインか。"""
         cur = self.current
-        labels = [b.display_name + (" +" if b.dirty else "") for b in self.buffers]
+        labels = [
+            truncate_middle(b.display_name, TAB_NAME_MAX) + (" +" if b.dirty else "")
+            for b in self.buffers
+        ]
         index = self.buffers.index(cur) if cur in self.buffers else 0
         self.tab_bar.set_tabs(labels, index, focused=active)
