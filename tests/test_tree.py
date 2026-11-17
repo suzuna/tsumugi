@@ -363,3 +363,136 @@ async def test_hidden_sidebar_tree_is_not_polled(root: Path) -> None:
         assert "  b.txt" not in _labels(tree)
         await pilot.press("ctrl+e")  # また出すと反映される
         assert await _wait_for(pilot, lambda: "  b.txt" in _labels(tree))
+
+
+async def _sidebar_tree(pilot, app) -> FileTree:
+    await pilot.pause()
+    await pilot.press("ctrl+e")
+    await pilot.pause(0.3)
+    return app.editor.sidebar.query_one(FileTree)
+
+
+async def _answer(pilot, app, text: str) -> None:
+    from tsumugi.prompt import PromptInput
+
+    assert app.editor.infobar.active
+    app.editor.infobar.query_one(PromptInput).value = text
+    await pilot.press("enter")
+    await pilot.pause(0.3)
+
+
+def _message(app) -> str:
+    return str(app.editor.infobar.query_one("#message").render())
+
+
+async def test_rename_file_updates_open_buffer(root: Path) -> None:
+    f = root / "a.txt"
+    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=root))
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(f)
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Rename" in str(app.editor.infobar.query_one("#prompt-label").render())
+        await _answer(pilot, app, "b.txt")
+        assert not f.exists()
+        assert (root / "b.txt").read_text() == "a"
+        assert app.editor.buffers[0].path == root / "b.txt"
+        assert tree.cursor_node.data.path == root / "b.txt"
+        assert tree.has_focus
+
+
+async def test_rename_dir_moves_buffers_inside(root: Path) -> None:
+    inner = root / "sub" / "inner.txt"
+    app = TsumugiApp([inner], system_clipboard=False, config=Config(explorer_root=root))
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(root / "sub")
+        await pilot.press("f2")
+        await pilot.pause()
+        await _answer(pilot, app, "renamed")
+        assert app.editor.buffers[0].path == root / "renamed" / "inner.txt"
+
+
+async def test_rename_refuses_existing_name(root: Path) -> None:
+    (root / "b.txt").write_text("b")
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(root / "a.txt")
+        await pilot.press("r")
+        await pilot.pause()
+        await _answer(pilot, app, "b.txt")
+        assert (root / "a.txt").read_text() == "a"
+        assert (root / "b.txt").read_text() == "b"
+        assert _message(app) == "b.txt already exists"
+
+
+async def test_mkdir_nested_inside_cursor_dir(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(root / "sub")
+        await pilot.press("m")
+        await pilot.pause()
+        await _answer(pilot, app, "x/y")
+        assert (root / "sub" / "x" / "y").is_dir()
+        await pilot.pause(0.3)
+        assert tree.cursor_node.data.path == root / "sub" / "x" / "y"
+        assert tree.has_focus
+
+
+async def test_mkdir_next_to_cursor_file(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(root / "a.txt")
+        await pilot.press("m")
+        await pilot.pause()
+        await _answer(pilot, app, "new")
+        assert (root / "new").is_dir()
+
+
+async def test_delete_moves_to_trash(root: Path, monkeypatch) -> None:
+    import subprocess
+
+    from tsumugi import app as app_module
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        Path(args[1]).unlink()
+        return subprocess.CompletedProcess(args, 0, b"", b"")
+
+    monkeypatch.setattr(app_module.shutil, "which", lambda name: "/usr/bin/trash")
+    monkeypatch.setattr(app_module.subprocess, "run", fake_run)
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        tree = await _sidebar_tree(pilot, app)
+        tree.select_path(root / "a.txt")
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        assert calls == []
+        assert _message(app) == "Delete cancelled"
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause(0.3)
+        assert calls == [["/usr/bin/trash", str(root / "a.txt")]]
+        assert _message(app) == "Moved a.txt to trash"
+        assert "  a.txt" not in _labels(tree)
+        assert tree.has_focus
+
+
+async def test_file_ops_disabled_in_overlay(root: Path) -> None:
+    app = await _open_sidebar(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        await pilot.press("m")
+        await pilot.pause()
+        assert not app.editor.infobar.active

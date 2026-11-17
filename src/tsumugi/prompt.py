@@ -8,6 +8,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.widget import Widget
 from textual.widgets import Input, Label
 
 
@@ -59,6 +60,7 @@ class InfoBar(Horizontal):
         self._on_change: Callable[[str], None] | None = None
         self._on_cancel: Callable[[], None] | None = None
         self._single_key: set[str] | None = None
+        self._return_focus: Widget | None = None
 
     def compose(self) -> ComposeResult:
         yield Label("", id="prompt-label")
@@ -81,9 +83,14 @@ class InfoBar(Horizontal):
         on_cancel: Callable[[], None] | None = None,
         initial: str = "",
         choices: set[str] | None = None,
+        return_focus: Widget | None = None,
     ) -> None:
-        """プロンプトを出す。choices を渡すと、その1文字が入力された時点で確定する。"""
+        """プロンプトを出す。choices を渡すと、その1文字が入力された時点で確定する。
+
+        閉じたらエディタにフォーカスを戻す。return_focus を渡すとそちらへ戻す。
+        """
         self._on_submit = on_submit
+        self._return_focus = return_focus
         self._on_change = on_change
         self._on_cancel = on_cancel
         self._single_key = choices
@@ -100,7 +107,11 @@ class InfoBar(Horizontal):
         self.query_one("#prompt-label", Label).update("")
         self._on_submit = self._on_change = self._on_cancel = None
         self._single_key = None
-        self.app.focus_editor()
+        target, self._return_focus = self._return_focus, None
+        if target is not None and target.is_attached and target.display:
+            target.focus()
+        else:
+            self.app.focus_editor()
 
     def cancel(self) -> None:
         cb = self._on_cancel

@@ -94,16 +94,34 @@ class FileTree(DirectoryTree):
         if node is self.root and self.cursor_line < 0:
             self.call_after_refresh(self._cursor_to_first_line)
 
-    def select_path(self, path: Path) -> bool:
-        """読み込み済みのノードから path を探してカーソルを移す。見つからなければ False。"""
+    def find_node(self, path: Path) -> TreeNode[DirEntry] | None:
+        """読み込み済みのノードから path のものを探す。"""
         stack = list(self.root.children)
         while stack:
             node = stack.pop()
             if node.data is not None and node.data.path == path:
-                self.move_cursor(node)
-                return True
+                return node
             stack.extend(node.children)
-        return False
+        return None
+
+    def select_path(self, path: Path) -> bool:
+        """読み込み済みのノードから path を探してカーソルを移す。見つからなければ False。"""
+        node = self.find_node(path)
+        if node is None:
+            return False
+        self.move_cursor(node)
+        return True
+
+    async def reveal(self, path: Path) -> bool:
+        """読み直してから、path までの親を展開してカーソルを合わせる。"""
+        await self.reload()
+        for ancestor in reversed(path.parents):
+            node = self.find_node(ancestor)
+            if node is None or not node.allow_expand or node.is_expanded:
+                continue
+            node.expand()
+            await self._add_to_load_queue(node)
+        return self.select_path(path)
 
     @property
     def is_busy(self) -> bool:
@@ -267,6 +285,9 @@ class ExplorerPanel(Vertical):
         Binding("backspace", "parent", "Parent dir", show=False),
         Binding("full_stop", "toggle_hidden", "Hidden files", show=False),
         Binding("s", "toggle_sort", "Sort order", show=False),
+        Binding("r,f2", "file_op('rename')", "Rename", show=False),
+        Binding("d", "file_op('delete')", "Delete", show=False),
+        Binding("m", "file_op('mkdir')", "New directory", show=False),
     ]
 
     class Changed(Message):
@@ -275,6 +296,19 @@ class ExplorerPanel(Vertical):
         def __init__(self, panel: ExplorerPanel) -> None:
             super().__init__()
             self.panel = panel
+
+    class FileOp(Message):
+        """ツリーでのファイル操作（rename / delete / mkdir）の依頼。
+
+        名前の入力は画面下のインフォバーを使うので、EditorScreen が受け取って処理する。
+        path はカーソルのパス（ツリーが空なら None）。
+        """
+
+        def __init__(self, panel: ExplorerPanel, kind: str, path: Path | None) -> None:
+            super().__init__()
+            self.panel = panel
+            self.kind = kind
+            self.path = path
 
     def __init__(
         self, root: Path, show_hidden: bool = False, sort_desc: bool = False, **kwargs
@@ -328,6 +362,17 @@ class ExplorerPanel(Vertical):
         parent = self.root.parent
         if parent != self.root:
             self.set_root(parent)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        # オーバーレイにはインフォバーがないので、ファイル操作はサイドバーだけ
+        if action == "file_op" and isinstance(self.screen, ExplorerScreen):
+            return False
+        return True
+
+    def action_file_op(self, kind: str) -> None:
+        node = self.tree.cursor_node
+        path = node.data.path if node is not None and node.data is not None else None
+        self.post_message(self.FileOp(self, kind, path))
 
     def action_toggle_hidden(self) -> None:
         tree = self.tree

@@ -471,6 +471,135 @@ class EditorScreen(Screen[None]):
         self.explorer_show_hidden = event.panel.show_hidden
         self.explorer_sort_desc = event.panel.sort_desc
 
+    # ---- ツリーでのファイル操作（サイドバーのみ） ----
+
+    def on_explorer_panel_file_op(self, event: ExplorerPanel.FileOp) -> None:
+        event.stop()
+        if event.kind == "rename":
+            self._rename_path(event.panel, event.path)
+        elif event.kind == "delete":
+            self._trash_path(event.panel, event.path)
+        elif event.kind == "mkdir":
+            self._make_dir(event.panel, event.path)
+
+    def _reveal(self, panel: ExplorerPanel, path: Path) -> None:
+        self.run_worker(panel.tree.reveal(path))
+
+    def _rename_path(self, panel: ExplorerPanel, path: Path | None) -> None:
+        if path is None:
+            return
+
+        def on_name(text: str) -> None:
+            name = text.strip()
+            if not name or name == path.name:
+                self.message("Rename cancelled")
+                return
+            if "/" in name or name in (".", ".."):
+                self.message(f"Invalid name: {name}")
+                return
+            target = path.with_name(name)
+            # 大文字小文字だけ変えるとき（macOS では同じファイル扱い）は通す
+            if target.exists() and not _same_file(path, target):
+                self.message(f"{name} already exists")
+                return
+            try:
+                path.rename(target)
+            except OSError as e:
+                self.message(f"Error renaming: {e.strerror}")
+                return
+            self._move_buffers(path, target)
+            self.message(f"Renamed {path.name} to {name}")
+            self._reveal(panel, target)
+
+        self.infobar.ask(
+            "Rename: ",
+            on_name,
+            initial=path.name,
+            on_cancel=lambda: self.message("Rename cancelled"),
+            return_focus=panel.tree,
+        )
+
+    def _move_buffers(self, old: Path, new: Path) -> None:
+        """名前を変えたファイル / ディレクトリを開いているバッファのパスを付け替える。"""
+        for buf in self.buffers:
+            if buf.path is None:
+                continue
+            if buf.path == old:
+                buf.path = new
+            elif buf.path.is_relative_to(old):
+                buf.path = new / buf.path.relative_to(old)
+        self.refresh_bars()
+
+    def _trash_path(self, panel: ExplorerPanel, path: Path | None) -> None:
+        if path is None:
+            return
+        name = path.name + ("/" if path.is_dir() else "")
+
+        def on_answer(answer: str) -> None:
+            if answer != "y":
+                self.message("Delete cancelled")
+                return
+            trash = shutil.which("trash")
+            if trash is None:
+                self.message("Cannot delete: 'trash' command not found")
+                return
+            try:
+                out = subprocess.run(
+                    [trash, str(path)], capture_output=True, timeout=30, check=False
+                )
+            except (OSError, subprocess.SubprocessError) as e:
+                self.message(f"Error moving to trash: {e}")
+                return
+            if out.returncode != 0:
+                err = out.stderr.decode("utf-8", errors="replace").strip()
+                self.message(f"Error moving to trash: {err or out.returncode}")
+                return
+            # 開いているバッファは残す（ディスク上の変更の検知で deleted と知らせる）
+            self.message(f"Moved {name} to trash")
+            panel.tree.reload()
+
+        self.infobar.ask(
+            f"Move {name} to trash? (y,n,esc) ",
+            on_answer,
+            choices={"y", "n"},
+            on_cancel=lambda: self.message("Delete cancelled"),
+            return_focus=panel.tree,
+        )
+
+    def _make_dir(self, panel: ExplorerPanel, path: Path | None) -> None:
+        # カーソルがディレクトリならその中、ファイルならその隣に作る
+        if path is None:
+            base = panel.root
+        elif path.is_dir():
+            base = path
+        else:
+            base = path.parent
+
+        def on_name(text: str) -> None:
+            name = text.strip()
+            if not name:
+                self.message("Cancelled")
+                return
+            target = (base / Path(name).expanduser()).resolve()
+            if target.exists():
+                self.message(f"{display_path(target)} already exists")
+                return
+            try:
+                target.mkdir(parents=True)
+            except OSError as e:
+                self.message(f"Error creating {name}: {e.strerror}")
+                return
+            self.message(f"Created {display_path(target)}/")
+            self._reveal(panel, target)
+
+        where = truncate_left(display_path(base).rstrip("/") + "/", 30)
+        self.infobar.ask(
+            f"New dir ({where}): ",
+            on_name,
+            on_cancel=lambda: self.message("Cancelled"),
+            return_focus=panel.tree,
+        )
+
     async def on_directory_tree_file_selected(
         self, event: DirectoryTree.FileSelected
     ) -> None:
@@ -530,6 +659,13 @@ class EditorScreen(Screen[None]):
 
     def action_find_prev(self) -> None:
         self._find_again(False)
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.samefile(b)
+    except OSError:
+        return False
 
 
 class TsumugiApp(App[None], inherit_bindings=False):
