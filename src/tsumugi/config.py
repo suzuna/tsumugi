@@ -6,6 +6,7 @@
     soft_wrap = true            # 長い行を右端で折り返す（既定は false）
     css = "style.tcss"          # 見た目のカスタム CSS（相対パスは設定ファイルのディレクトリ基準）
     mkparents = true            # 保存先のフォルダがなければ作る（既定は false、micro と同じ）
+    hide_single_tab = true      # タブが1枚のときはタブバーを隠す（既定は false）
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ class Config:
     soft_wrap: bool = False
     css: Path | None = None
     mkparents: bool = False
+    hide_single_tab: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -48,6 +50,7 @@ def load_config(path: Path | None = None) -> Config:
     _read_soft_wrap(data, path, config)
     _read_css(data, path, config)
     _read_mkparents(data, path, config)
+    _read_hide_single_tab(data, path, config)
     return config
 
 
@@ -107,3 +110,13 @@ def _read_mkparents(data: dict, path: Path, config: Config) -> None:
         config.warnings.append(f"{path}: mkparents must be true or false")
         return
     config.mkparents = value
+
+
+def _read_hide_single_tab(data: dict, path: Path, config: Config) -> None:
+    value = data.get("hide_single_tab")
+    if value is None:
+        return
+    if not isinstance(value, bool):
+        config.warnings.append(f"{path}: hide_single_tab must be true or false")
+        return
+    config.hide_single_tab = value

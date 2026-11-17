@@ -17,6 +17,9 @@ css = "style.tcss"
 
 # 保存先のフォルダがなければ作る（既定は false。micro の mkparents と同じ）
 mkparents = true
+
+# タブが1枚のときはタブバーを隠す（既定は false。1枚でも出す）
+hide_single_tab = true
 ```
 
 ## カスタム CSS

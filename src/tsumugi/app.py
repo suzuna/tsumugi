@@ -118,7 +118,7 @@ class EditorScreen(Screen[None]):
             # サイドバーの中身（ツリー）は最初に表示したときに作る
             yield Vertical(id="sidebar")
             with Vertical(id="editor-area"):
-                yield TabBar()
+                yield TabBar(self._config.hide_single_tab)
                 yield ContentSwitcher()
         yield StatusBar()
         yield InfoBar()

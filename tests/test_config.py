@@ -173,3 +173,22 @@ def test_mkparents_invalid_warns(xdg: Path) -> None:
     config = load_config()
     assert config.mkparents is False
     assert config.warnings
+
+
+def test_hide_single_tab(xdg: Path) -> None:
+    xdg.write_text("hide_single_tab = true\n")
+    config = load_config()
+    assert config.hide_single_tab is True
+    assert config.warnings == []
+
+
+def test_hide_single_tab_defaults_to_false(xdg: Path) -> None:
+    xdg.write_text("# empty\n")
+    assert load_config().hide_single_tab is False
+
+
+def test_hide_single_tab_invalid_warns(xdg: Path) -> None:
+    xdg.write_text('hide_single_tab = "yes"\n')
+    config = load_config()
+    assert config.hide_single_tab is False
+    assert config.warnings

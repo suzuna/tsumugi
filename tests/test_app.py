@@ -251,12 +251,24 @@ async def test_help() -> None:
         assert isinstance(app.focused, Buffer)
 
 
-async def test_status_bar_hides_tabbar_for_single_buffer() -> None:
+async def test_tabbar_shown_for_single_buffer() -> None:
     app = make_app()
     async with app.run_test() as pilot:
         await pilot.pause()
-        assert not editor(app).query_one(TabBar).display
+        assert editor(app).query_one(TabBar).display
         assert editor(app).query_one(InfoBar)
+
+
+async def test_hide_single_tab_hides_tabbar_until_two_tabs() -> None:
+    app = TsumugiApp(
+        [], system_clipboard=False, config=Config(sidebar=False, hide_single_tab=True)
+    )
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert not editor(app).query_one(TabBar).display
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        assert editor(app).query_one(TabBar).display
 
 
 async def test_line_numbers_have_left_space(tmp_path: Path) -> None:

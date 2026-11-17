@@ -1,4 +1,4 @@
-"""micro 風のタブバー。タブが2つ以上のときだけ表示する。"""
+"""micro 風のタブバー。既定ではタブが1つでも表示し、hide_single なら2つ以上のときだけ表示する。"""
 
 from __future__ import annotations
 
@@ -27,8 +27,9 @@ class TabBar(Widget):
             super().__init__()
             self.index = index
 
-    def __init__(self) -> None:
+    def __init__(self, hide_single: bool = False) -> None:
         super().__init__()
+        self._hide_single = hide_single
         self._labels: list[str] = []
         self._active = 0
         self._spans: list[tuple[int, int]] = []
@@ -36,7 +37,7 @@ class TabBar(Widget):
     def set_tabs(self, labels: list[str], active: int) -> None:
         self._labels = labels
         self._active = active
-        self.display = len(labels) > 1
+        self.display = len(labels) > (1 if self._hide_single else 0)
         self.refresh()
 
     def render(self) -> Text:
