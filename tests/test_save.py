@@ -21,6 +21,13 @@ def message(app: TsumugiApp) -> str:
     return str(app.editor.infobar.query_one("#message").render())
 
 
+async def settle(pilot) -> None:
+    # タブを閉じるのは worker で動くので、終わるまで待つ。待たずに抜けると、
+    # アプリを閉じている途中でタブバーを描き直すことがある
+    await pilot.app.workers.wait_for_complete()
+    await pilot.pause()
+
+
 async def type_filename(pilot, app: TsumugiApp, name: str) -> None:
     """Ctrl+S のあとの Filename プロンプトに名前を入れて Enter。"""
     assert app.editor.infobar.active
@@ -135,7 +142,7 @@ async def test_close_save_overwrite_then_closes(tmp_path: Path) -> None:
         await pilot.press("z", "ctrl+w", "y")
         await type_filename(pilot, app, str(target))
         await pilot.press("y")
-        await pilot.pause()
+        await settle(pilot)
         assert target.read_text() == "z"
         assert len(app.editor.buffers) == 1
 
@@ -377,7 +384,7 @@ async def test_close_last_tab_keeps_empty_tab(tmp_path: Path) -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+w")
-        await pilot.pause()
+        await settle(pilot)
         ed = app.editor
         assert app.is_running
         assert len(ed.buffers) == 1
