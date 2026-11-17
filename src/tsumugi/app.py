@@ -96,6 +96,7 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+g", "help", "Help", priority=True),
         Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
         Binding("ctrl+w", "switch_pane", "Switch pane", priority=True),
+        Binding("ctrl+o", "open_directory", "Open directory", priority=True),
     ]
 
     def __init__(self, files: list[Path], config: Config) -> None:
@@ -443,7 +444,8 @@ class EditorScreen(Screen[None]):
         )
 
         async def on_close(path: Path | None) -> None:
-            self.explorer_root = screen.root
+            # オーバーレイの中で Backspace / o で移動していたら、そこを開く
+            self._set_root(screen.root)
             self.explorer_show_hidden = screen.show_hidden
             self.explorer_sort_desc = screen.sort_desc
             if path is not None:
@@ -503,9 +505,68 @@ class EditorScreen(Screen[None]):
 
     def on_explorer_panel_changed(self, event: ExplorerPanel.Changed) -> None:
         # サイドバーで移動・切替したら、オーバーレイの次回の起点にも反映する
-        self.explorer_root = event.panel.root
-        self.explorer_show_hidden = event.panel.show_hidden
-        self.explorer_sort_desc = event.panel.sort_desc
+        panel = event.panel
+        if panel.root != self.explorer_root:
+            old = self.explorer_root
+            if not self._set_root(panel.root):
+                # 移れなかったら、ツリーも元の起点に戻す（起点と cwd をずらさない）
+                panel.set_root(old)
+        self.explorer_show_hidden = panel.show_hidden
+        self.explorer_sort_desc = panel.sort_desc
+
+    # ---- ディレクトリを開く ----
+
+    def _set_root(self, path: Path) -> bool:
+        """path を開く。ツリーの起点とカレントディレクトリをそろえて変える。
+
+        サイドバーのツリーは呼ぶ側で合わせる。移れなければ False。
+        """
+        if path == self.explorer_root:
+            return True
+        try:
+            os.chdir(path)
+        except OSError as e:
+            self.message(f"Cannot open {display_path(path)}: {e.strerror}")
+            return False
+        self.explorer_root = self.cwd = path
+        # ステータスバーのパスは新しいカレントディレクトリからの相対パスになる
+        self.refresh_bars()
+        return True
+
+    def action_open_directory(self) -> None:
+        self._after_pending_input(self._open_directory)
+
+    def _open_directory(self) -> None:
+        base = self.explorer_root
+
+        def on_path(text: str) -> None:
+            text = text.strip()
+            if not text:
+                self.message("Cancelled")
+                return
+            target = Path(text).expanduser()
+            if not target.is_absolute():
+                target = base / target
+            target = target.resolve()
+            if not target.is_dir():
+                self.message(f"{display_path(target)} is not a directory")
+                return
+            if not self._set_root(target):
+                return
+            # サイドバーは表示 / 非表示を変えずに中身だけ切り替える。
+            # 作っていなければ、最初に開いたときに今の起点から作られる
+            panel = self._sidebar_panel()
+            if panel is not None and panel.root != target:
+                panel.set_root(target)
+
+        self.infobar.ask(
+            "Open directory: ",
+            on_path,
+            initial=display_path(base).rstrip("/") + "/",
+            on_cancel=lambda: self.message("Cancelled"),
+            # サイドバーのツリーから開いたら、閉じたあともツリーに戻る
+            return_focus=self.app.focused,
+        )
 
     # ---- ツリーでのファイル操作（サイドバーのみ） ----
 

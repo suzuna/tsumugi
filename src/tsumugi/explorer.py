@@ -283,6 +283,7 @@ class ExplorerPanel(Vertical):
 
     BINDINGS = [
         Binding("backspace", "parent", "Parent dir", show=False),
+        Binding("o", "enter_dir", "Open directory", show=False),
         Binding("full_stop", "toggle_hidden", "Hidden files", show=False),
         Binding("s", "toggle_sort", "Sort order", show=False),
         Binding("r,f2", "file_op('rename')", "Rename", show=False),
@@ -363,6 +364,13 @@ class ExplorerPanel(Vertical):
         if parent != self.root:
             self.set_root(parent)
 
+    def action_enter_dir(self) -> None:
+        """カーソルのディレクトリを起点にする（Backspace の逆）。ファイルの上では何もしない。"""
+        node = self.tree.cursor_node
+        if node is None or node.data is None or not node.allow_expand:
+            return
+        self.set_root(node.data.path)
+
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         # オーバーレイにはインフォバーがないので、ファイル操作はサイドバーだけ
         if action == "file_op" and isinstance(self.screen, ExplorerScreen):
@@ -429,7 +437,7 @@ class ExplorerScreen(ModalScreen[Path | None]):
         )
         panel.border_title = "Explorer"
         panel.border_subtitle = (
-            "Enter: open  BS: parent  .: hidden  s: sort  Esc: close"
+            "Enter: open  o: open dir  BS: parent  .: hidden  s: sort  Esc: close"
         )
         yield panel
 

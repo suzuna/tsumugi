@@ -15,6 +15,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("Ctrl+S", "Save"),
             ("Ctrl+Q", "Close tab (quit when last)"),
+            ("Ctrl+O", "Open directory"),
             ("Ctrl+B", "Open file explorer"),
             ("Ctrl+E", "Toggle sidebar tree"),
             ("Ctrl+W", "Switch sidebar / editor"),
@@ -50,7 +51,8 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Enter", "Open file / expand directory"),
             ("Right", "Expand directory"),
             ("Left", "Collapse directory / go to parent"),
-            ("Backspace", "Go to parent directory"),
+            ("o", "Open directory under cursor"),
+            ("Backspace", "Open parent directory"),
             (".", "Toggle hidden files"),
             ("s", "Toggle name order (asc / desc)"),
             ("r / F2", "Rename (sidebar only)"),
