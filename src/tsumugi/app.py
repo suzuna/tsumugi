@@ -1162,7 +1162,10 @@ class TsumugiApp(App[None], inherit_bindings=False):
     TITLE = "tsumugi"
     ENABLE_COMMAND_PALETTE = False
     # Textual 既定の Ctrl+Q（即終了）と Ctrl+C（終了ヘルプ）を外す
-    BINDINGS = []
+    # オーバーレイのツリーでも効くよう、EditorScreen ではなく App に置く
+    BINDINGS = [
+        Binding("ctrl+l", "copy_path", "Copy path", priority=True),
+    ]
     # スクロールバーは幅1マス（つまみの描き方は scrollbar.py）
     CSS = """
     * {
@@ -1210,6 +1213,27 @@ class TsumugiApp(App[None], inherit_bindings=False):
         buf = self.editor.current
         if buf is not None:
             buf.focus()
+
+    def action_copy_path(self) -> None:
+        """ツリーにフォーカスがあればカーソル位置の、なければ今のタブのファイルの絶対パスをコピーする。"""
+        editor = self.editor
+        focused = self.focused
+        if isinstance(focused, DirectoryTree):
+            node = focused.cursor_node
+            if node is None or node.data is None:
+                return
+            path: Path | None = node.data.path.expanduser().resolve()
+        elif self.screen is editor and not editor.infobar.active:
+            buf = editor.current
+            path = buf.path if buf is not None else None
+            if path is None:
+                self.show_message("No file path to copy")
+                return
+        else:
+            # 検索の入力中やヘルプなど、ツリー以外のモーダルでは何もしない
+            return
+        self.copy_to_clipboard(str(path))
+        self.show_message(f"Copied {path}")
 
     # ---- クリップボード: macOS では pbcopy/pbpaste も使う ----
 

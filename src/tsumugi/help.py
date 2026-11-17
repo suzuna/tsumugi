@@ -19,6 +19,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Ctrl+O", "Open directory"),
             ("Ctrl+B", "Open file explorer"),
             ("Ctrl+E", "Toggle sidebar tree"),
+            ("Ctrl+L", "Copy path of file / tree item"),
             ("Ctrl+T", "New tab"),
             ("Ctrl+PgUp / PgDn", "Previous / next tab"),
             ("Alt+, / Alt+.", "Previous / next tab (*)"),

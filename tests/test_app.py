@@ -507,3 +507,63 @@ async def test_save_waits_for_bound_keys_sent_together(tmp_path: Path) -> None:
         )
         assert f.read_text() == "on"
         assert not editor(app).current.dirty
+
+
+async def test_copy_path_of_current_file(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("a")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+l")
+        assert app.clipboard == str(f.resolve())
+
+
+async def test_copy_path_of_untitled_does_nothing(tmp_path: Path) -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.copy_to_clipboard("before")
+        await pilot.press("ctrl+l")
+        assert app.clipboard == "before"
+
+
+async def test_copy_path_ignored_while_prompting(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("a")
+    app = make_app(f)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.copy_to_clipboard("before")
+        await pilot.press("ctrl+f")
+        await pilot.pause()
+        await pilot.press("ctrl+l")
+        assert app.clipboard == "before"
+
+
+async def test_copy_path_in_sidebar_tree(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    os.chdir(tmp_path)
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = app.editor.sidebar.query_one(FileTree)
+        assert app.focused is tree
+        await pilot.press("ctrl+l")
+        assert app.clipboard == str((tmp_path / "sub").resolve())
+
+
+async def test_copy_path_in_explorer_overlay(tmp_path: Path) -> None:
+    (tmp_path / "b.txt").write_text("b")
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        editor(app).explorer_root = tmp_path
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        assert isinstance(app.screen, ExplorerScreen)
+        await pilot.press("ctrl+l")
+        assert app.clipboard == str((tmp_path / "b.txt").resolve())
+        assert isinstance(app.screen, ExplorerScreen)  # 閉じない
