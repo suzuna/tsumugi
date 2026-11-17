@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import count
 from pathlib import Path
 
+from textual import events
 from textual.binding import Binding
 from textual.widgets import TextArea
 from textual.widgets.text_area import Document, Selection
@@ -222,6 +223,33 @@ class Buffer(TextArea):
 
     def action_noop(self) -> None:
         pass
+
+    async def _on_key(self, event: events.Key) -> None:
+        # Enter は TextArea._on_key の中で "\n" を入れているので、Binding では届かない
+        if event.key == "enter" and not self.read_only:
+            event.stop()
+            event.prevent_default()
+            self._newline_with_indent()
+            return
+        await super()._on_key(event)
+
+    def _newline_with_indent(self) -> None:
+        """改行して、今の行の先頭の空白を新しい行に引き継ぐ。
+
+        改行したあと今の行が空白だけになるなら、その空白は消す（空行に空白を残さない）。
+        """
+        start, end = sorted(self.selection)
+        row, col = start
+        line = self.document.get_line(row)
+        indent = line[: len(line) - len(line.lstrip(" \t"))]
+        # インデントの途中にカーソルがあるときは、カーソルより左の分だけ引き継ぐ
+        indent = indent[:col]
+        end_line = self.document.get_line(end[0])
+        if not line[:col].strip() and not end_line[end[1] :].strip():
+            start = (row, 0)
+            end = (end[0], len(end_line))
+        # 1回の edit にまとめて、undo 1回で戻るようにする
+        self.replace("\n" + indent, start, end, maintain_selection_offset=False)
 
     def _line_text_with_newline(self, row: int) -> str:
         line = self.document.get_line(row)

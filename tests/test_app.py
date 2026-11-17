@@ -76,6 +76,72 @@ async def test_copy_cut_paste_line() -> None:
         assert buf.text == "one\ntwo\n"
 
 
+async def test_enter_keeps_indent() -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        buf.text = "def hoge(x, y):\n  tmp = x + y"
+        buf.move_cursor((1, len("  tmp = x + y")))
+        await pilot.press("enter")
+        assert buf.text == "def hoge(x, y):\n  tmp = x + y\n  "
+        assert buf.cursor_location == (2, 2)
+        # 空白だけの行で改行すると、その行の空白は消える
+        await pilot.press("enter")
+        assert buf.text == "def hoge(x, y):\n  tmp = x + y\n\n  "
+        assert buf.cursor_location == (3, 2)
+
+
+async def test_enter_keeps_tab_indent() -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        buf.text = "\tfoo"
+        buf.move_cursor((0, 4))
+        await pilot.press("enter")
+        assert buf.text == "\tfoo\n\t"
+
+
+async def test_enter_inside_indent() -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        buf.text = "  tmp"
+        buf.move_cursor((0, 1))
+        await pilot.press("enter")
+        # カーソルより左の分だけ引き継ぐので、インデントは増えない
+        assert buf.text == " \n  tmp"
+        assert buf.cursor_location == (1, 1)
+
+
+async def test_enter_replaces_selection_with_indent() -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        buf.text = "  foo bar"
+        buf.selection = Selection((0, 5), (0, 9))
+        await pilot.press("enter")
+        assert buf.text == "  foo\n  "
+        assert buf.selection.is_empty
+        assert buf.cursor_location == (1, 2)
+
+
+async def test_enter_indent_undo_at_once() -> None:
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        buf = editor(app).current
+        buf.text = "  a\n  "
+        buf.move_cursor((1, 2))
+        await pilot.press("enter")
+        assert buf.text == "  a\n\n  "
+        await pilot.press("ctrl+z")
+        assert buf.text == "  a\n  "
+
+
 async def test_select_all() -> None:
     app = make_app()
     async with app.run_test() as pilot:
