@@ -93,6 +93,7 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+f", "find", "Find", priority=True),
         Binding("ctrl+n", "find_next", "Find next", priority=True),
         Binding("ctrl+p", "find_prev", "Find previous", priority=True),
+        Binding("ctrl+r", "replace", "Replace", priority=True),
         Binding("ctrl+g", "help", "Help", priority=True),
         Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
         Binding("ctrl+w", "switch_pane", "Switch pane", priority=True),
@@ -759,6 +760,125 @@ class EditorScreen(Screen[None]):
 
     def action_find_prev(self) -> None:
         self._after_pending_input(lambda: self._find_again(False))
+
+    def action_replace(self) -> None:
+        self._after_pending_input(self._replace)
+
+    def _replace(self) -> None:
+        buf = self.current
+        if buf is None:
+            return
+
+        def cancelled() -> None:
+            self.message("Cancelled")
+
+        def on_needle(needle: str) -> None:
+            if not needle:
+                cancelled()
+                return
+            self.last_search = needle
+            self.infobar.ask(
+                "Replace with: ",
+                lambda text: self._replace_each(buf, needle, text),
+                on_cancel=cancelled,
+            )
+
+        self.infobar.ask("Replace: ", on_needle, on_cancel=cancelled)
+
+    def _replace_each(self, buf: Buffer, needle: str, text: str) -> None:
+        """一致を1件ずつ選択して (y,n,a,esc) で聞きながら置き換える。
+
+        選択中ならその中だけ、なければカーソルから末尾、先頭からカーソルの手前の順に見る。
+        範囲は [探し始める位置, この位置より前から始まる一致だけ見る] の組で持つ。
+        """
+        n = len(needle)
+        delta = len(text) - n
+        start, end = sorted(buf.index_of(p) for p in buf.selection)
+        if start != end:
+            segments = [[start, end - n + 1]]
+        else:
+            segments = [[start, len(buf.text) + 1], [0, start]]
+        found = False
+        count = 0
+
+        def next_match() -> int | None:
+            while segments:
+                pos, limit = segments[0]
+                idx = buf.find_index(needle, pos, limit)
+                if idx is not None:
+                    return idx
+                segments.pop(0)
+            return None
+
+        def ask_next() -> None:
+            nonlocal found
+            idx = next_match()
+            if idx is None:
+                finish()
+                return
+            found = True
+            buf.select_index(idx, n)
+            self.infobar.ask(
+                "Replace? (y,n,a,esc) ",
+                lambda answer: on_answer(idx, answer),
+                choices={"y", "n", "a"},
+                on_cancel=finish,
+            )
+
+        def on_answer(idx: int, answer: str) -> None:
+            nonlocal count
+            if answer == "a":
+                replace_rest()
+                finish()
+                return
+            if answer == "y":
+                buf.replace_index(idx, n, text)
+                count += 1
+                # 置き換えた位置より後ろの範囲の端は、長さが変わったぶんずれる
+                for seg in segments:
+                    if seg[1] > idx:
+                        seg[1] += delta
+                segments[0][0] = idx + len(text)
+            else:
+                segments[0][0] = idx + n
+            ask_next()
+
+        def replace_rest() -> None:
+            # 残りの一致をまとめて置き換え、1回の編集にする（1回の undo で戻る）
+            nonlocal count
+            matches: list[int] = []
+            for pos, limit in segments:
+                while (idx := buf.find_index(needle, pos, limit)) is not None:
+                    matches.append(idx)
+                    pos = idx + n
+            matches.sort()
+            kept: list[int] = []
+            for idx in matches:
+                # 折り返しの前後で重なった一致は前のほうだけ使う
+                if not kept or idx >= kept[-1] + n:
+                    kept.append(idx)
+            if not kept:
+                return
+            first, last = kept[0], kept[-1] + n
+            source = buf.text
+            pieces: list[str] = []
+            pos = first
+            for idx in kept:
+                pieces += [source[pos:idx], text]
+                pos = idx + n
+            replaced = "".join(pieces)
+            buf.replace_index(first, last - first, replaced)
+            buf.move_cursor(buf.location_of(first + len(replaced)))
+            count += len(kept)
+
+        def finish() -> None:
+            buf.move_cursor(buf.selection.end)
+            if not found:
+                self.message(f"No matches for '{needle}'")
+            else:
+                self.message(f"Replaced {count} occurrence{'' if count == 1 else 's'}")
+
+        ask_next()
 
 
 def _same_file(a: Path, b: Path) -> bool:

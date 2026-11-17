@@ -230,3 +230,29 @@ class Buffer(TextArea):
     def _select_match(self, row: int, col: int, needle: str) -> None:
         self.selection = Selection((row, col), (row, col + len(needle)))
         self.scroll_cursor_visible(center=True)
+
+    # ---- 置換 ----
+    # 置換は本文の文字列での位置（index）で扱う。探す文字列は改行を含まない
+
+    def index_of(self, location: tuple[int, int]) -> int:
+        return self.document.get_index_from_location(location)
+
+    def location_of(self, index: int) -> tuple[int, int]:
+        return self.document.get_location_from_index(index)
+
+    def find_index(self, needle: str, start: int, limit: int) -> int | None:
+        """start 以降で最初の needle の位置。limit 以降から始まるものは見ない。折り返さない。"""
+        idx = self.text.find(needle, start)
+        return idx if 0 <= idx < limit else None
+
+    def select_index(self, index: int, length: int) -> None:
+        self.selection = Selection(
+            self.location_of(index), self.location_of(index + length)
+        )
+        self.scroll_cursor_visible(center=True)
+
+    def replace_index(self, index: int, length: int, text: str) -> None:
+        """index から length 文字を text に置き換える。1回の undo で戻る単位にする。"""
+        self.history.checkpoint()
+        self.replace(text, self.location_of(index), self.location_of(index + length))
+        self.history.checkpoint()

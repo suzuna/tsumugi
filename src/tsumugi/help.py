@@ -43,6 +43,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("Ctrl+F", "Find"),
             ("Ctrl+N / Ctrl+P", "Find next / previous"),
+            ("Ctrl+R", "Replace"),
         ],
     ),
     (
