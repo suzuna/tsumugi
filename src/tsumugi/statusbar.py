@@ -40,7 +40,7 @@ class StatusBar(Widget):
     def update_status(
         self, path: str, dirty: bool, row: int, col: int, newline: str
     ) -> None:
-        eol = "dos" if newline == "\r\n" else "unix"
+        eol = {"\r\n": "dos", "\r": "mac"}.get(newline, "unix")
         self._path = path
         self._mark = " +" if dirty else ""
         # 左の先頭の空白とそろうよう、右端にも空白を1つ置く

@@ -81,3 +81,17 @@ async def test_status_bar_has_no_help_hint(tmp_path: Path) -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         assert "Ctrl-g" not in _bar_text(app)
+
+
+@pytest.mark.parametrize(
+    ("nl", "label"), [("\n", "unix"), ("\r\n", "dos"), ("\r", "mac")]
+)
+async def test_status_bar_shows_newline_style(
+    tmp_path: Path, nl: str, label: str
+) -> None:
+    f = tmp_path / "a.txt"
+    f.write_bytes(f"one{nl}two{nl}".encode())
+    app = TsumugiApp([f], system_clipboard=False, config=Config(explorer_root=tmp_path))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert _bar_text(app).endswith(f"(1,1) | {label} | utf-8 ")
