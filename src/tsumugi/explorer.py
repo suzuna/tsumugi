@@ -425,7 +425,7 @@ class ExplorerScreen(ModalScreen[Path | None]):
     """
 
     BINDINGS = [
-        Binding("escape,ctrl+b,ctrl+q", "close", "Close", show=False),
+        Binding("escape,ctrl+b", "close", "Close", show=False),
     ]
 
     def __init__(

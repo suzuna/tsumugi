@@ -123,7 +123,7 @@ class HelpScreen(ModalScreen[None]):
     }
     """
 
-    BINDINGS = [Binding("escape,ctrl+g,ctrl+q,q", "close", show=False)]
+    BINDINGS = [Binding("escape,ctrl+g,q", "close", show=False)]
 
     def compose(self) -> ComposeResult:
         with VerticalScroll() as box:

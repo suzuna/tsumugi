@@ -15,7 +15,6 @@ from textual.widgets import Input, Label
 class PromptInput(Input):
     BINDINGS = [
         Binding("escape", "cancel", show=False),
-        Binding("ctrl+q", "cancel", show=False),
     ]
 
     def action_cancel(self) -> None:
