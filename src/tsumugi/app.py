@@ -23,13 +23,8 @@ from textual.widgets import DirectoryTree, TextArea
 
 from .config import Config, load_config
 from .editor import Buffer, file_sig
-from .explorer import (
-    ExplorerPanel,
-    ExplorerScreen,
-    display_path,
-    resolve_dir,
-    truncate_left,
-)
+from .explorer import ExplorerPanel, ExplorerScreen, display_path, truncate_left
+from .finder import FinderScreen
 from .help import HelpScreen
 from .panes import Pane
 from .prompt import InfoBar
@@ -122,7 +117,7 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
         Binding("ctrl+j", "focus_tree", "Tree / pane", priority=True),
         Binding("ctrl+u", "switch_pane", "Switch pane", priority=True),
-        Binding("ctrl+o", "open_directory", "Open directory", priority=True),
+        Binding("ctrl+o", "quick_open", "Open file", priority=True),
         Binding("ctrl+backslash", "toggle_split", "Split", priority=True),
         Binding("ctrl+right_square_bracket", "move_tab", "Move tab", priority=True),
     ]
@@ -620,6 +615,15 @@ class EditorScreen(Screen[None]):
 
         self.app.push_screen(screen, on_close)
 
+    def action_quick_open(self) -> None:
+        async def on_close(path: Path | None) -> None:
+            if path is not None:
+                await self.open_path(path)
+            else:
+                self.app.focus_editor()
+
+        self.app.push_screen(FinderScreen(self.explorer_root), on_close)
+
     # ---- サイドバー ----
 
     @property
@@ -807,37 +811,6 @@ class EditorScreen(Screen[None]):
         # ステータスバーのパスは新しいカレントディレクトリからの相対パスになる
         self.refresh_bars()
         return True
-
-    def action_open_directory(self) -> None:
-        self._after_pending_input(self._open_directory)
-
-    def _open_directory(self) -> None:
-        base = self.explorer_root
-
-        def on_path(text: str) -> None:
-            if not text.strip():
-                self.message("Cancelled")
-                return
-            target = resolve_dir(text, base)
-            if isinstance(target, str):
-                self.message(target)
-                return
-            if not self._set_root(target):
-                return
-            # サイドバーは表示 / 非表示を変えずに中身だけ切り替える。
-            # 作っていなければ、最初に開いたときに今の起点から作られる
-            panel = self._sidebar_panel()
-            if panel is not None and panel.root != target:
-                panel.set_root(target)
-
-        self.infobar.ask(
-            "Open directory: ",
-            on_path,
-            initial=display_path(base).rstrip("/") + "/",
-            on_cancel=lambda: self.message("Cancelled"),
-            # サイドバーのツリーから開いたら、閉じたあともツリーに戻る
-            return_focus=self.app.focused,
-        )
 
     # ---- ツリーでのファイル操作（サイドバーのみ） ----
 
