@@ -294,7 +294,7 @@ async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
         ed = app.editor
         await pilot.press("ctrl+backslash")
         await settle(pilot)
-        await pilot.press("ctrl+q")
+        await pilot.press("ctrl+w")
         await settle(pilot)
         assert ed.split is None
         assert names(ed.panes[0]) == ["a.txt"]

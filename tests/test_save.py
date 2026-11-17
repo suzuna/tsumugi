@@ -130,9 +130,9 @@ async def test_close_save_overwrite_then_closes(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("ctrl+t")  # 2つ目のタブ（閉じても終了しないように）
+        await pilot.press("ctrl+t")  # 2つ目のタブ
         await pilot.pause()
-        await pilot.press("z", "ctrl+q", "y")
+        await pilot.press("z", "ctrl+w", "y")
         await type_filename(pilot, app, str(target))
         await pilot.press("y")
         await pilot.pause()
@@ -361,3 +361,119 @@ def _rewrite_bytes(path: Path, data: bytes) -> None:
     st = path.stat()
     path.write_bytes(data)
     os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+
+
+# ---- Ctrl+W / Ctrl+Q ----
+
+
+def prompt_label(app: TsumugiApp) -> str:
+    return str(app.editor.infobar.query_one("#prompt-label").render())
+
+
+async def test_close_last_tab_keeps_empty_tab(tmp_path: Path) -> None:
+    a = tmp_path / "a.txt"
+    a.write_text("aaa")
+    app = make_app(tmp_path, a)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+w")
+        await pilot.pause()
+        ed = app.editor
+        assert app.is_running
+        assert len(ed.buffers) == 1
+        assert ed.current.path is None
+        assert ed.current.text == ""
+
+
+async def test_quit_without_unsaved_exits(tmp_path: Path) -> None:
+    a = tmp_path / "a.txt"
+    a.write_text("aaa")
+    app = make_app(tmp_path, a)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t", "ctrl+q")
+        await pilot.pause()
+    assert app.return_code == 0
+
+
+async def test_quit_asks_each_unsaved_tab(tmp_path: Path) -> None:
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("")
+    b.write_text("")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("x", "ctrl+pageup", "y", "ctrl+pagedown", "ctrl+q")
+        await pilot.pause()
+        # 左のタブから順に、そのタブを表示して聞く
+        assert "a.txt" in prompt_label(app)
+        assert ed.current.path == a
+        await pilot.press("y")
+        await pilot.pause()
+        assert "b.txt" in prompt_label(app)
+        assert ed.current.path == b
+        await pilot.press("n")
+        await pilot.pause()
+    assert app.return_code == 0
+    assert a.read_text() == "y"
+    assert b.read_text() == ""
+
+
+async def test_quit_save_all_rest(tmp_path: Path) -> None:
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("")
+    b.write_text("")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("x", "ctrl+pageup", "y", "ctrl+q", "a")
+        await pilot.pause()
+    assert app.return_code == 0
+    assert a.read_text() == "y"
+    assert b.read_text() == "x"
+
+
+async def test_quit_cancel_keeps_running(tmp_path: Path) -> None:
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("")
+    b.write_text("")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("x", "ctrl+pageup", "y", "ctrl+q", "y")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.is_running
+        assert not app.editor.infobar.active
+        assert "Quit cancelled" in message(app)
+        assert len(app.editor.buffers) == 2
+    assert a.read_text() == "y"
+    assert b.read_text() == ""
+
+
+async def test_quit_untitled_asks_filename(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("z", "ctrl+q", "y")
+        await type_filename(pilot, app, "new.txt")
+        await pilot.pause()
+    assert app.return_code == 0
+    assert (tmp_path / "new.txt").read_text() == "z"
+
+
+async def test_quit_stops_when_filename_cancelled(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("z", "ctrl+q", "y")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.is_running
+        assert app.editor.current.dirty

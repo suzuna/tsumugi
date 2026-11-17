@@ -102,7 +102,8 @@ class EditorScreen(Screen[None]):
 
     BINDINGS = [
         Binding("ctrl+s", "save", "Save", priority=True),
-        Binding("ctrl+q", "close_tab", "Quit", priority=True),
+        Binding("ctrl+w", "close_tab", "Close tab", priority=True),
+        Binding("ctrl+q", "quit_all", "Quit", priority=True),
         Binding("ctrl+b", "explorer", "Explorer", priority=True),
         Binding("ctrl+t", "new_tab", "New tab", priority=True),
         Binding("alt+comma,ctrl+pageup", "prev_tab", "Previous tab", priority=True),
@@ -302,7 +303,8 @@ class EditorScreen(Screen[None]):
             self.switch_to(pane.current or pane.buffers[0])
             return
         if len(self.panes) == 1:
-            self.app.exit()
+            # 最後のタブを閉じても終了はしない（終了は Ctrl+Q）。空の無題バッファを残す
+            await self.add_buffer(self._new_buffer())
             return
         # 分割していてペインが空になったら、分割をやめて残ったペインへ
         await self._close_empty_pane(pane)
@@ -503,7 +505,6 @@ class EditorScreen(Screen[None]):
     def _close_tab(self) -> None:
         buf = self.current
         if buf is None:
-            self.app.exit()
             return
         if not buf.dirty:
             self.run_worker(self.close_buffer(buf))
@@ -520,6 +521,50 @@ class EditorScreen(Screen[None]):
             on_answer,
             choices={"y", "n"},
         )
+
+    def action_quit_all(self) -> None:
+        self._after_pending_input(self._quit_all)
+
+    def _quit_all(self) -> None:
+        """全部のタブを閉じて終了する。未保存のタブは1つずつ、そのタブを表示して保存するか聞く。
+
+        y で保存、n で保存しない、a で残りを全部保存。Esc や保存の失敗・キャンセルで
+        終了をやめる（それまでに保存したファイルはそのまま）。
+        """
+        pending = [b for b in self.buffers if b.dirty]
+        save_rest = False
+
+        def ask_next() -> None:
+            nonlocal save_rest
+            # 聞いている間に閉じたり保存したりしたバッファは飛ばす
+            while pending and not (pending[0] in self.buffers and pending[0].dirty):
+                pending.pop(0)
+            if not pending:
+                self.app.exit()
+                return
+            buf = pending.pop(0)
+            self.switch_to(buf)
+            if save_rest:
+                self._save(then=ask_next)
+                return
+            self.infobar.ask(
+                f"Save changes to {buf.display_name} before quitting? (y,n,a,esc) ",
+                on_answer,
+                choices={"y", "n", "a"},
+                on_cancel=lambda: self.message("Quit cancelled"),
+            )
+
+        def on_answer(answer: str) -> None:
+            nonlocal save_rest
+            if answer == "n":
+                ask_next()
+                return
+            if answer == "a":
+                save_rest = True
+            # 保存に失敗したりキャンセルしたりしたら then は呼ばれず、そこで終了をやめる
+            self._save(then=ask_next)
+
+        ask_next()
 
     async def action_new_tab(self) -> None:
         await self.add_buffer(self._new_buffer())

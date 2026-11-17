@@ -215,11 +215,11 @@ async def test_tabs_cycle_and_close_with_confirm(tmp_path: Path) -> None:
         assert ed.current is ed.buffers[0]
         await pilot.press("ctrl+pagedown")
         assert ed.current is second
-        await pilot.press("z", "ctrl+q")
+        await pilot.press("z", "ctrl+w")
         assert ed.infobar.active
         await pilot.press("escape")  # キャンセル
         assert len(ed.buffers) == 2
-        await pilot.press("ctrl+q", "n")
+        await pilot.press("ctrl+w", "n")
         await pilot.pause()
         assert len(ed.buffers) == 1
         await pilot.press("ctrl+q")
@@ -233,7 +233,7 @@ async def test_close_dirty_and_save(tmp_path: Path) -> None:
     app = make_app(f)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("q", "ctrl+q", "y")
+        await pilot.press("q", "ctrl+w", "y")
         await pilot.pause()
     assert f.read_text() == "q"
 
@@ -471,7 +471,7 @@ async def test_close_tab_waits_for_keys_sent_together(tmp_path: Path) -> None:
     app = make_app(f)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await _keys_at_once(pilot, app, ("x", "x"), ("ctrl+q", None))
+        await _keys_at_once(pilot, app, ("x", "x"), ("ctrl+w", None))
         # x が入ってから閉じようとするので、保存するか聞かれる
         ed = editor(app)
         assert ed.infobar.active

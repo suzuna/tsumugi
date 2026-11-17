@@ -14,7 +14,8 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         "File",
         [
             ("Ctrl+S", "Save"),
-            ("Ctrl+Q", "Close tab (quit when last)"),
+            ("Ctrl+W", "Close tab"),
+            ("Ctrl+Q", "Quit (asks for each unsaved tab)"),
             ("Ctrl+O", "Open directory"),
             ("Ctrl+B", "Open file explorer"),
             ("Ctrl+E", "Toggle sidebar tree"),
