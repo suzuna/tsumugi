@@ -445,8 +445,12 @@ class EditorScreen(Screen[None]):
         )
 
         async def on_close(path: Path | None) -> None:
-            # オーバーレイの中で Backspace / o で移動していたら、そこを開く
+            # オーバーレイの中で Backspace / o で移動していたら、そこを開く。
+            # サイドバーのツリーも同じ起点に合わせる（移れなければ元のまま）
             self._set_root(screen.root)
+            panel = self._sidebar_panel()
+            if panel is not None and panel.root != self.explorer_root:
+                panel.set_root(self.explorer_root)
             self.explorer_show_hidden = screen.show_hidden
             self.explorer_sort_desc = screen.sort_desc
             if path is not None:

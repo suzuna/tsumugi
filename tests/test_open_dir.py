@@ -213,6 +213,23 @@ async def test_overlay_backspace_changes_cwd(root: Path) -> None:
         assert Path.cwd() == root
 
 
+async def test_overlay_backspace_moves_sidebar_root(root: Path) -> None:
+    app = make_app(root / "proj")
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+e")
+        await pilot.pause(0.3)
+        tree = _sidebar_tree(app)
+        assert tree.path == root / "proj"
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        assert isinstance(app.screen, ExplorerScreen)
+        await pilot.press("backspace", "escape")
+        await pilot.pause(0.3)
+        assert Path.cwd() == root
+        assert tree.path == root
+
+
 async def test_opening_file_keeps_root(root: Path) -> None:
     app = make_app(root)
     async with app.run_test() as pilot:
