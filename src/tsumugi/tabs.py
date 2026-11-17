@@ -21,10 +21,10 @@ class TabBar(Widget):
         width: 1fr;
     }
     TabBar > .tab-bar--active {
-        text-style: reverse bold;
+        text-style: bold underline;
     }
     TabBar > .tab-bar--unfocused {
-        text-style: bold underline;
+        text-style: bold;
     }
     """
 

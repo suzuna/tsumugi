@@ -471,7 +471,7 @@ async def test_active_tab_style_comes_from_css(tmp_path: Path) -> None:
     css = tmp_path / "style.tcss"
     css.write_text(
         "TabBar { background: #ea7599; color: #ffffff; }\n"
-        "TabBar > .tab-bar--active { text-style: underline; }\n"
+        "TabBar > .tab-bar--active { text-style: italic; }\n"
     )
     app = TsumugiApp(
         [a, b], system_clipboard=False, config=Config(sidebar=False, css=css)
@@ -484,8 +484,9 @@ async def test_active_tab_style_comes_from_css(tmp_path: Path) -> None:
             if seg.text.strip()
         }
         # 選択中（最後に開いた b.txt）だけ CSS の指定が付き、バーの色は全体に効く
-        assert segments["b.txt"].underline
-        assert not segments["a.txt"].underline
+        assert segments["b.txt"].italic
+        assert not segments["b.txt"].underline
+        assert not segments["a.txt"].italic
         assert segments["a.txt"].bgcolor.triplet.hex == "#ea7599"
 
 

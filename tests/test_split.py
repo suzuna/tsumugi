@@ -303,7 +303,7 @@ async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
         assert app.is_running
 
 
-async def test_inactive_pane_tab_is_not_reversed(tmp_path: Path) -> None:
+async def test_inactive_pane_tab_is_bold_without_underline(tmp_path: Path) -> None:
     a, b = files(tmp_path, "a.txt", "b.txt")
     app = make_app(tmp_path, a, b)
     async with app.run_test() as pilot:
@@ -319,13 +319,17 @@ async def test_inactive_pane_tab_is_not_reversed(tmp_path: Path) -> None:
             )
             return seg.style
 
-        assert selected_style(right).reverse
+        # 操作中のペインは太字 + 下線、もう一方は太字だけ。どちらも反転しない
+        assert selected_style(right).bold
+        assert selected_style(right).underline
+        assert not selected_style(right).reverse
+        assert selected_style(left).bold
+        assert not selected_style(left).underline
         assert not selected_style(left).reverse
-        assert selected_style(left).underline
         await pilot.press("ctrl+u")
         await pilot.pause()
-        assert selected_style(left).reverse
-        assert not selected_style(right).reverse
+        assert selected_style(left).underline
+        assert not selected_style(right).underline
 
 
 # ---- ドラッグ & ドロップ ----
