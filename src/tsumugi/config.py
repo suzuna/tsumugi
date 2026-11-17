@@ -1,7 +1,7 @@
 """設定ファイル（$XDG_CONFIG_HOME/tsumugi/config.toml）の読み込み。
 
 例:
-    sidebar = true              # 起動時にサイドバーを開く（既定は false）
+    sidebar = false             # 起動時にサイドバーを開かない（既定は true）
     tree_sort = "desc"          # ツリーの名前順 asc / desc（既定は asc）
     soft_wrap = true            # 長い行を右端で折り返す（既定は false）
     css = "style.tcss"          # 見た目のカスタム CSS（相対パスは設定ファイルのディレクトリ基準）
@@ -18,7 +18,7 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    sidebar: bool = False
+    sidebar: bool = True
     tree_sort: str = "asc"
     soft_wrap: bool = False
     css: Path | None = None

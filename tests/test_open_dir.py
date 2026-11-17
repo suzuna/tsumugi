@@ -22,7 +22,7 @@ def root(tmp_path: Path) -> Path:
 
 def make_app(root: Path, *files: Path) -> TsumugiApp:
     os.chdir(root)
-    return TsumugiApp(list(files), system_clipboard=False, config=Config())
+    return TsumugiApp(list(files), system_clipboard=False, config=Config(sidebar=False))
 
 
 def _message(app: TsumugiApp) -> str:

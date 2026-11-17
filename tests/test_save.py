@@ -13,6 +13,7 @@ def make_app(
 ) -> TsumugiApp:
     # ツリーの起点（相対パスで保存するときの基準）は起動したディレクトリ
     os.chdir(root or tmp_path)
+    config.setdefault("sidebar", False)
     return TsumugiApp(list(files), system_clipboard=False, config=Config(**config))
 
 

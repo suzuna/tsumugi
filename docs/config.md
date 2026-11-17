@@ -3,8 +3,8 @@
 `~/.config/tsumugi/config.toml`（`XDG_CONFIG_HOME` があれば `$XDG_CONFIG_HOME/tsumugi/config.toml`）に書く。読めないときは既定値で起動し、下段に警告を出す。
 
 ```toml
-# 起動時にサイドバーのツリーを開く（既定は false）
-sidebar = true
+# 起動時にサイドバーのツリーを開かない（既定は true）
+sidebar = false
 
 # ツリーの名前順 "asc" / "desc"（既定は "asc"）
 tree_sort = "desc"

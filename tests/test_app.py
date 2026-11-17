@@ -14,7 +14,7 @@ from tsumugi.tabs import TabBar
 
 
 def make_app(*files: Path) -> TsumugiApp:
-    return TsumugiApp(list(files), system_clipboard=False)
+    return TsumugiApp(list(files), system_clipboard=False, config=Config(sidebar=False))
 
 
 def editor(app: TsumugiApp) -> EditorScreen:
@@ -286,7 +286,9 @@ async def test_soft_wrap_numbers_only_first_row(tmp_path: Path) -> None:
 
     f = tmp_path / "long.txt"
     f.write_text("x" * 100 + "\nshort\n")
-    app = TsumugiApp([f], system_clipboard=False, config=Config(soft_wrap=True))
+    app = TsumugiApp(
+        [f], system_clipboard=False, config=Config(sidebar=False, soft_wrap=True)
+    )
     async with app.run_test(size=(40, 12)) as pilot:
         await pilot.pause()
         buf = editor(app).current
@@ -337,7 +339,7 @@ async def test_custom_css_is_applied(tmp_path: Path) -> None:
         "EditorScreen Buffer { background: #180b33; }\n"
     )
     os.chdir(tmp_path)
-    app = TsumugiApp([], system_clipboard=False, config=Config(css=css))
+    app = TsumugiApp([], system_clipboard=False, config=Config(sidebar=False, css=css))
     async with app.run_test() as pilot:
         await pilot.pause()
         bar = editor(app).query_one(StatusBar)
@@ -393,7 +395,9 @@ async def test_active_tab_style_comes_from_css(tmp_path: Path) -> None:
         "TabBar { background: #ea7599; color: #ffffff; }\n"
         "TabBar > .tab-bar--active { text-style: underline; }\n"
     )
-    app = TsumugiApp([a, b], system_clipboard=False, config=Config(css=css))
+    app = TsumugiApp(
+        [a, b], system_clipboard=False, config=Config(sidebar=False, css=css)
+    )
     async with app.run_test() as pilot:
         await pilot.pause()
         segments = {
@@ -413,7 +417,7 @@ async def test_help_key_color_comes_from_css(tmp_path: Path) -> None:
     css = tmp_path / "style.tcss"
     css.write_text("HelpText > .help--key { color: #ea7599; }\n")
     os.chdir(tmp_path)
-    app = TsumugiApp([], system_clipboard=False, config=Config(css=css))
+    app = TsumugiApp([], system_clipboard=False, config=Config(sidebar=False, css=css))
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("ctrl+g")

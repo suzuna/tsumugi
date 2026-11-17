@@ -10,7 +10,7 @@ from tsumugi.tabs import TabBar
 
 def make_app(root: Path, *files: Path) -> TsumugiApp:
     os.chdir(root)
-    return TsumugiApp(list(files), system_clipboard=False, config=Config())
+    return TsumugiApp(list(files), system_clipboard=False, config=Config(sidebar=False))
 
 
 def _tree(app: TsumugiApp) -> FileTree:
@@ -146,8 +146,19 @@ async def test_sidebar_open_at_startup_with_file_focuses_editor(tmp_path: Path) 
         assert app.editor.current.path == f.resolve()
 
 
-async def test_sidebar_closed_at_startup_by_default(tmp_path: Path) -> None:
-    app = make_app(tmp_path)
+async def test_sidebar_open_at_startup_by_default(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    app = TsumugiApp([], system_clipboard=False, config=Config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.editor.sidebar_visible
+        assert app.focused is _tree(app)
+
+
+async def test_sidebar_closed_at_startup_when_disabled(tmp_path: Path) -> None:
+    os.chdir(tmp_path)
+    app = TsumugiApp([], system_clipboard=False, config=Config(sidebar=False))
     async with app.run_test() as pilot:
         await pilot.pause()
         assert not app.editor.sidebar_visible
+        assert isinstance(app.focused, Buffer)

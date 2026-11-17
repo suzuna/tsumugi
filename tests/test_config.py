@@ -27,15 +27,15 @@ def test_missing_file_uses_defaults(xdg: Path) -> None:
 def test_broken_toml_warns(xdg: Path) -> None:
     xdg.write_text("sidebar = \n")
     config = load_config()
-    assert config.sidebar is False
+    assert config.sidebar is True
     assert config.warnings
 
 
 def test_old_explorer_root_is_ignored(xdg: Path) -> None:
     # 起点は起動したディレクトリになったので、古い設定が残っていても黙って無視する
-    xdg.write_text('explorer_root = "~/repos"\nsidebar = true\n')
+    xdg.write_text('explorer_root = "~/repos"\nsidebar = false\n')
     config = load_config()
-    assert config.sidebar is True
+    assert config.sidebar is False
     assert config.warnings == []
 
 
@@ -55,23 +55,30 @@ def test_sidebar_true(xdg: Path) -> None:
     assert config.warnings == []
 
 
-def test_sidebar_defaults_to_false(xdg: Path) -> None:
+def test_sidebar_false(xdg: Path) -> None:
+    xdg.write_text("sidebar = false\n")
+    config = load_config()
+    assert config.sidebar is False
+    assert config.warnings == []
+
+
+def test_sidebar_defaults_to_true(xdg: Path) -> None:
     xdg.write_text("# empty\n")
-    assert load_config().sidebar is False
+    assert load_config().sidebar is True
 
 
 def test_sidebar_not_bool_warns(xdg: Path) -> None:
     xdg.write_text('sidebar = "yes"\n')
     config = load_config()
-    assert config.sidebar is False
+    assert config.sidebar is True
     assert config.warnings
 
 
 def test_sidebar_read_even_if_other_key_invalid(xdg: Path) -> None:
-    xdg.write_text('tree_sort = "random"\nsidebar = true\n')
+    xdg.write_text('tree_sort = "random"\nsidebar = false\n')
     config = load_config()
     assert config.tree_sort == "asc"
-    assert config.sidebar is True
+    assert config.sidebar is False
     assert len(config.warnings) == 1
 
 

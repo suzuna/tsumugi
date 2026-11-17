@@ -18,7 +18,7 @@ def root(tmp_path: Path) -> Path:
 
 async def _open_sidebar(root: Path):
     os.chdir(root)
-    app = TsumugiApp([], system_clipboard=False, config=Config())
+    app = TsumugiApp([], system_clipboard=False, config=Config(sidebar=False))
     return app
 
 
@@ -156,7 +156,7 @@ async def test_sidebar_root_path_is_one_line(tmp_path: Path) -> None:
     deep = tmp_path / "very-long-directory-name" / "another-long-directory" / "posts"
     deep.mkdir(parents=True)
     os.chdir(deep)
-    app = TsumugiApp([], system_clipboard=False, config=Config())
+    app = TsumugiApp([], system_clipboard=False, config=Config(sidebar=False))
     async with app.run_test(size=(100, 20)) as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")
@@ -262,7 +262,7 @@ async def test_tree_sort_desc_at_startup(sortable: Path) -> None:
     app = TsumugiApp(
         [],
         system_clipboard=False,
-        config=Config(tree_sort="desc"),
+        config=Config(sidebar=False, tree_sort="desc"),
     )
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -392,7 +392,7 @@ def _message(app) -> str:
 async def test_rename_file_updates_open_buffer(root: Path) -> None:
     f = root / "a.txt"
     os.chdir(root)
-    app = TsumugiApp([f], system_clipboard=False, config=Config())
+    app = TsumugiApp([f], system_clipboard=False, config=Config(sidebar=False))
     async with app.run_test() as pilot:
         tree = await _sidebar_tree(pilot, app)
         tree.select_path(f)
@@ -410,7 +410,7 @@ async def test_rename_file_updates_open_buffer(root: Path) -> None:
 async def test_rename_dir_moves_buffers_inside(root: Path) -> None:
     inner = root / "sub" / "inner.txt"
     os.chdir(root)
-    app = TsumugiApp([inner], system_clipboard=False, config=Config())
+    app = TsumugiApp([inner], system_clipboard=False, config=Config(sidebar=False))
     async with app.run_test() as pilot:
         tree = await _sidebar_tree(pilot, app)
         tree.select_path(root / "sub")

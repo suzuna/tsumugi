@@ -69,7 +69,7 @@ async def test_scrollbars_are_one_cell_and_thin(tmp_path: Path) -> None:
     long = tmp_path / "long.txt"
     long.write_text("\n".join("line " * 40 for _ in range(200)))
     os.chdir(tmp_path)
-    app = TsumugiApp([long], system_clipboard=False, config=Config())
+    app = TsumugiApp([long], system_clipboard=False, config=Config(sidebar=False))
     async with app.run_test(size=(80, 20)) as pilot:
         await pilot.pause()
         await pilot.press("ctrl+e")
