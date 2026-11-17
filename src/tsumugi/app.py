@@ -21,6 +21,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
 from textual.screen import Screen
 from textual.theme import BUILTIN_THEMES, Theme
+from textual.widget import Widget
 from textual.widgets import DirectoryTree, TextArea
 
 from .config import Config, load_config
@@ -30,6 +31,7 @@ from .finder import FinderScreen
 from .help import HelpScreen
 from .panes import Pane
 from .prompt import InfoBar
+from .resize import EDITOR_MIN_WIDTH, SIDEBAR_MIN_WIDTH, EdgeDrag, clamp
 from .scrollbar import install as install_scrollbar
 from .statusbar import StatusBar, status_path
 from .tabs import TabBar
@@ -56,6 +58,23 @@ class AfterInput(Message):
         # いるとその親で伝わるのを止める。EditorScreen の中（タブのドロップなど）で作っても
         # App まで届くように、送り主を持たせない
         self._sender = None
+
+
+class Sidebar(EdgeDrag, Vertical):
+    """サイドバーの入れ物。右の区切り線をドラッグして幅を変えられる。"""
+
+    def is_edge(self, screen_x: int, screen_y: int) -> bool:
+        region, content = self.region, self.content_region
+        return screen_x == region.right - 1 and content.right < region.right
+
+    def on_edge_drag(self, screen_x: int, screen_y: int) -> None:
+        parent = self.parent
+        if not isinstance(parent, Widget):
+            return
+        # 区切り線がマウスの位置に来る幅
+        width = screen_x - self.region.x + 1
+        limit = parent.content_region.width - EDITOR_MIN_WIDTH
+        self.styles.width = clamp(width, SIDEBAR_MIN_WIDTH, limit)
 
 
 class EditorScreen(Screen[None]):
@@ -143,7 +162,7 @@ class EditorScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
             # サイドバーの中身（ツリー）は最初に表示したときに作る
-            yield Vertical(id="sidebar")
+            yield Sidebar(id="sidebar")
             with Container(id="editor-area"):
                 yield Pane(self._config.hide_single_tab)
         yield StatusBar()
@@ -629,8 +648,8 @@ class EditorScreen(Screen[None]):
     # ---- サイドバー ----
 
     @property
-    def sidebar(self) -> Vertical:
-        return self.query_one("#sidebar", Vertical)
+    def sidebar(self) -> Sidebar:
+        return self.query_one("#sidebar", Sidebar)
 
     @property
     def sidebar_visible(self) -> bool:
@@ -697,6 +716,9 @@ class EditorScreen(Screen[None]):
             if split is None:
                 await self._split_with_current()
             elif split == "horizontal":
+                # 左右で変えた幅は上下には引き継がない
+                for pane in self.panes:
+                    pane.reset_size()
                 self.editor_area.add_class("-vertical")
             else:
                 await self._unsplit()
@@ -783,6 +805,7 @@ class EditorScreen(Screen[None]):
         self.editor_area.remove_class("-vertical")
         for rest in self.panes:
             rest.remove_class("-second")
+            rest.reset_size()
 
     def on_explorer_panel_changed(self, event: ExplorerPanel.Changed) -> None:
         # サイドバーで移動・切替したら、オーバーレイの次回の起点にも反映する

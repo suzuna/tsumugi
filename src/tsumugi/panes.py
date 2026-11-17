@@ -8,17 +8,19 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.css.query import NoMatches
+from textual.widget import Widget
 from textual.widgets import ContentSwitcher
 
 from .editor import Buffer
 from .explorer import truncate_middle
+from .resize import PANE_MIN_HEIGHT, PANE_MIN_WIDTH, EdgeDrag, clamp
 from .tabs import TabBar
 
 # タブに出すファイル名の最大の表示幅（未保存の印 " +" は含めない）
 TAB_NAME_MAX = 20
 
 
-class Pane(Vertical):
+class Pane(EdgeDrag, Vertical):
     DEFAULT_CSS = """
     Pane {
         width: 1fr;
@@ -88,6 +90,50 @@ class Pane(Vertical):
         """同じペインの中でタブの位置を変える。"""
         self.buffers.remove(buf)
         self.buffers.insert(min(index, len(self.buffers)), buf)
+
+    # ---- 区切り線のドラッグ ----
+
+    def _is_vertical_split(self) -> bool:
+        parent = self.parent
+        return isinstance(parent, Widget) and parent.has_class("-vertical")
+
+    def is_edge(self, screen_x: int, screen_y: int) -> bool:
+        # 区切り線は2つ目のペインの左 / 上の枠線
+        if not self.has_class("-second"):
+            return False
+        region, content = self.region, self.content_region
+        if self._is_vertical_split():
+            return screen_y == region.y and content.y > region.y
+        return screen_x == region.x and content.x > region.x
+
+    def on_edge_drag(self, screen_x: int, screen_y: int) -> None:
+        """区切り線を動かした位置で、2つのペインの大きさを分け直す。
+
+        比（fr）で持つので、画面の大きさが変わっても割合は保たれる。
+        """
+        parent = self.parent
+        if not isinstance(parent, Widget):
+            return
+        panes = [w for w in parent.children if isinstance(w, Pane)]
+        if len(panes) != 2:
+            return
+        first, second = panes
+        area = parent.content_region
+        if self._is_vertical_split():
+            total = area.height
+            size = clamp(screen_y - area.y, PANE_MIN_HEIGHT, total - PANE_MIN_HEIGHT)
+            first.styles.height = f"{size}fr"
+            second.styles.height = f"{total - size}fr"
+        else:
+            total = area.width
+            size = clamp(screen_x - area.x, PANE_MIN_WIDTH, total - PANE_MIN_WIDTH)
+            first.styles.width = f"{size}fr"
+            second.styles.width = f"{total - size}fr"
+
+    def reset_size(self) -> None:
+        """ドラッグで変えた大きさを捨てて、CSS の指定（1fr）に戻す。"""
+        self.styles.width = None
+        self.styles.height = None
 
     def refresh_tabs(self, active: bool) -> None:
         """タブバーを描き直す。active はこのペインが今操作しているペインか。"""
