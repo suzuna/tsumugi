@@ -36,18 +36,21 @@ async def test_toggle_sidebar(tmp_path: Path) -> None:
         assert isinstance(app.focused, Buffer)
 
 
-async def test_switch_pane(tmp_path: Path) -> None:
+async def test_focus_tree(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("ctrl+w")  # サイドバーが出てないときは何もしない
+        await pilot.press("ctrl+j")  # サイドバーが出てないときは何もしない
         assert isinstance(app.focused, Buffer)
         await pilot.press("ctrl+e")
         await pilot.pause()
         assert app.focused is _tree(app)
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+j")
         assert isinstance(app.focused, Buffer)
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+j")
+        assert app.focused is _tree(app)
+        # 分割していなければ Ctrl+U は何もしない
+        await pilot.press("ctrl+u")
         assert app.focused is _tree(app)
 
 
@@ -93,7 +96,7 @@ async def test_sidebar_parent_updates_overlay_root(tmp_path: Path) -> None:
         await pilot.pause()
         assert _tree(app).path == tmp_path
         assert app.editor.explorer_root == tmp_path
-        await pilot.press("ctrl+w", "ctrl+b")
+        await pilot.press("ctrl+j", "ctrl+b")
         await pilot.pause()
         assert isinstance(app.screen, ExplorerScreen)
         assert app.screen.root == tmp_path

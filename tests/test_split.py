@@ -158,7 +158,7 @@ async def test_move_tab_between_panes(tmp_path: Path) -> None:
         left, right = ed.panes
         assert names(left) == ["a.txt", "b.txt"]
         assert names(right) == ["c.txt"]
-        await pilot.press("ctrl+w")  # 左のペインへ
+        await pilot.press("ctrl+u")  # 左のペインへ
         await pilot.pause()
         assert ed.active_pane is left
         assert ed.current.path == b
@@ -169,7 +169,7 @@ async def test_move_tab_between_panes(tmp_path: Path) -> None:
         assert ed.active_pane is right
         assert ed.current.path == b
         # 最後の1枚を移したら分割をやめる
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+u")
         await pilot.press("ctrl+right_square_bracket")
         await settle(pilot)
         assert ed.split is None
@@ -224,7 +224,7 @@ async def test_sidebar_opens_in_last_active_pane(tmp_path: Path) -> None:
         await pilot.press("ctrl+backslash")
         await settle(pilot)
         left, right = ed.panes
-        await pilot.press("ctrl+w")  # 左のペインへ
+        await pilot.press("ctrl+u")  # 左のペインへ
         await pilot.press("ctrl+e")
         await pilot.pause(0.3)
         tree = ed.sidebar.query_one(FileTree)
@@ -236,7 +236,7 @@ async def test_sidebar_opens_in_last_active_pane(tmp_path: Path) -> None:
         assert app.focused is tree
 
 
-async def test_switch_pane_cycles_sidebar_and_panes(tmp_path: Path) -> None:
+async def test_switch_pane_skips_sidebar(tmp_path: Path) -> None:
     a, b = files(tmp_path, "a.txt", "b.txt")
     app = make_app(tmp_path, a, b)
     async with app.run_test() as pilot:
@@ -246,21 +246,44 @@ async def test_switch_pane_cycles_sidebar_and_panes(tmp_path: Path) -> None:
         await settle(pilot)
         left, right = ed.panes
         assert app.focused is right.current
-        # サイドバーが出ていなければ左右だけ
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+u")
         assert app.focused is left.current
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+u")
         assert app.focused is right.current
+        # サイドバーが出ていても、Ctrl+U はペインの間だけを行き来する
         await pilot.press("ctrl+e")
         await pilot.pause()
         tree = ed.sidebar.query_one(FileTree)
         assert app.focused is tree
-        await pilot.press("ctrl+w")
-        assert app.focused is left.current
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+j")
         assert app.focused is right.current
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+u")
+        assert app.focused is left.current
+        await pilot.press("ctrl+u")
+        assert app.focused is right.current
+
+
+async def test_focus_tree_returns_to_last_pane(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        await pilot.press("ctrl+u", "ctrl+e")
+        await pilot.pause()
+        tree = ed.sidebar.query_one(FileTree)
         assert app.focused is tree
+        # ツリーから戻ると、最後に操作していた左のペインへ
+        await pilot.press("ctrl+j")
+        assert app.focused is left.current
+        await pilot.press("ctrl+j")
+        assert app.focused is tree
+        # ツリーから Ctrl+U を押すと、最後のペインではないほうへ
+        await pilot.press("ctrl+u")
+        assert app.focused is right.current
 
 
 async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
@@ -299,7 +322,7 @@ async def test_inactive_pane_tab_is_not_reversed(tmp_path: Path) -> None:
         assert selected_style(right).reverse
         assert not selected_style(left).reverse
         assert selected_style(left).underline
-        await pilot.press("ctrl+w")
+        await pilot.press("ctrl+u")
         await pilot.pause()
         assert selected_style(left).reverse
         assert not selected_style(right).reverse

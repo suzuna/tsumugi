@@ -161,7 +161,7 @@ async def test_relative_name_follows_sidebar_root(tmp_path: Path) -> None:
         await pilot.pause(0.3)
         await pilot.press("backspace")  # ツリーの起点を tmp_path に上げる
         await pilot.pause()
-        await pilot.press("ctrl+w", "b", "ctrl+s")
+        await pilot.press("ctrl+j", "b", "ctrl+s")
         await type_filename(pilot, app, "up.md")
         assert (tmp_path / "up.md").read_text() == "b"
         assert not (sub / "up.md").exists()

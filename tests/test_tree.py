@@ -244,7 +244,7 @@ async def test_sort_order_shared_with_overlay(sortable: Path) -> None:
         await pilot.pause()
         await pilot.press("ctrl+e")
         await pilot.pause(0.3)
-        await pilot.press("s", "ctrl+w", "ctrl+b")
+        await pilot.press("s", "ctrl+j", "ctrl+b")
         await pilot.pause(0.3)
         tree = app.screen.query_one(FileTree)
         assert _labels(tree)[0] == "+ dir2/"
@@ -276,10 +276,10 @@ async def test_tree_sort_desc_at_startup(sortable: Path) -> None:
             "  2022-b.md",
             "  2021-a.md",
         ]
-        await pilot.press("ctrl+w", "ctrl+b")
+        await pilot.press("ctrl+j", "ctrl+b")
         await pilot.pause(0.3)
         assert _labels(app.screen.query_one(FileTree))[0] == "+ dir2/"
-        await pilot.press("escape", "ctrl+w", "s")
+        await pilot.press("escape", "ctrl+j", "s")
         await pilot.pause(0.3)
         assert _labels(tree)[0] == "+ dir1/"
 

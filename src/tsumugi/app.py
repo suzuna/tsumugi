@@ -113,7 +113,8 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+r", "replace", "Replace", priority=True),
         Binding("ctrl+g", "help", "Help", priority=True),
         Binding("ctrl+e", "toggle_sidebar", "Sidebar", priority=True),
-        Binding("ctrl+w", "switch_pane", "Switch pane", priority=True),
+        Binding("ctrl+j", "focus_tree", "Tree / pane", priority=True),
+        Binding("ctrl+u", "switch_pane", "Switch pane", priority=True),
         Binding("ctrl+o", "open_directory", "Open directory", priority=True),
         Binding("ctrl+backslash", "toggle_split", "Split", priority=True),
         Binding("ctrl+right_square_bracket", "move_tab", "Move tab", priority=True),
@@ -596,18 +597,27 @@ class EditorScreen(Screen[None]):
         sidebar.add_class("-visible")
         panel.tree.focus()
 
-    def action_switch_pane(self) -> None:
-        """サイドバー（出ていれば）→ 左 / 上のペイン → 右 / 下のペイン の順にフォーカスを回す。"""
-        targets: list = []
+    def action_focus_tree(self) -> None:
+        """サイドバーのツリーとエディタの間でフォーカスを移す。サイドバーが出ていなければ何もしない。
+
+        エディタへ戻るときは、最後に操作していたペインへ戻る。
+        """
         panel = self._sidebar_panel()
-        if self.sidebar_visible and panel is not None:
-            targets.append(panel.tree)
-        targets += [p.current for p in self.panes if p.current is not None]
-        if len(targets) < 2:
+        if not self.sidebar_visible or panel is None:
             return
-        focused = self.app.focused
-        index = targets.index(focused) if focused in targets else -1
-        targets[(index + 1) % len(targets)].focus()
+        if self.app.focused is panel.tree:
+            self.app.focus_editor()
+        else:
+            panel.tree.focus()
+
+    def action_switch_pane(self) -> None:
+        """分割しているとき、もう一方のペインへフォーカスを移す。ツリーには行かない。"""
+        panes = self.panes
+        if len(panes) < 2:
+            return
+        other = panes[1] if self.active_pane is panes[0] else panes[0]
+        if other.current is not None:
+            other.current.focus()
 
     # ---- 分割 ----
 

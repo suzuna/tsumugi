@@ -28,7 +28,8 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("Ctrl+\\", "Split: off / left-right / top-bottom"),
             ("Ctrl+]", "Move tab to the other pane"),
-            ("Ctrl+W", "Switch sidebar / panes"),
+            ("Ctrl+U", "Switch between panes"),
+            ("Ctrl+J", "Switch sidebar tree / pane"),
         ],
     ),
     (
