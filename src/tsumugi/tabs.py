@@ -9,10 +9,16 @@ from textual.widget import Widget
 
 
 class TabBar(Widget):
+    # 選択中のタブの見た目は component class で付ける（カスタム CSS で変えられるように）
+    COMPONENT_CLASSES = {"tab-bar--active"}
+
     DEFAULT_CSS = """
     TabBar {
         height: 1;
         width: 1fr;
+    }
+    TabBar > .tab-bar--active {
+        text-style: reverse bold;
     }
     """
 
@@ -36,11 +42,12 @@ class TabBar(Widget):
     def render(self) -> Text:
         text = Text(no_wrap=True, overflow="ellipsis")
         self._spans = []
+        active_style = self.get_component_rich_style("tab-bar--active")
         for i, label in enumerate(self._labels):
             chunk = f" {label} "
             start = len(text)
             if i == self._active:
-                text.append(chunk, style="reverse bold")
+                text.append(chunk, style=active_style)
             else:
                 text.append(chunk)
             self._spans.append((start, len(text)))

@@ -3,6 +3,7 @@ from pathlib import Path
 from textual.widgets.text_area import Selection
 
 from tsumugi.app import EditorScreen, TsumugiApp
+from tsumugi.config import Config
 from tsumugi.editor import Buffer
 from tsumugi.explorer import ExplorerScreen, FileTree
 from tsumugi.help import HelpScreen
@@ -350,3 +351,26 @@ async def test_selection_is_readable(tmp_path: Path) -> None:
         for seg in selected:
             if seg.text.strip() in ("bc", "de"):
                 assert seg.style.color is None or seg.style.color.is_default
+
+
+async def test_active_tab_style_comes_from_css(tmp_path: Path) -> None:
+    a, b = tmp_path / "a.txt", tmp_path / "b.txt"
+    a.write_text("a")
+    b.write_text("b")
+    css = tmp_path / "style.tcss"
+    css.write_text(
+        "TabBar { background: #ea7599; color: #ffffff; }\n"
+        "TabBar > .tab-bar--active { text-style: underline; }\n"
+    )
+    app = TsumugiApp([a, b], system_clipboard=False, config=Config(css=css))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        segments = {
+            seg.text.strip(): seg.style
+            for seg in editor(app).query_one(TabBar).render_line(0)
+            if seg.text.strip()
+        }
+        # 選択中（最後に開いた b.txt）だけ CSS の指定が付き、バーの色は全体に効く
+        assert segments["b.txt"].underline
+        assert not segments["a.txt"].underline
+        assert segments["a.txt"].bgcolor.triplet.hex == "#ea7599"
