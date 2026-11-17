@@ -31,7 +31,7 @@ highlight_max_lines = 5000
 
 `css` に Textual CSS（`.tcss`）のパスを書くと、既定の見た目より優先して読み込む。相対パスは設定ファイルと同じディレクトリから探す。
 
-主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）、`TabBar`（上のタブバー）、`ExplorerScreen #explorer-box`（エクスプローラのオーバーレイの枠）、`FinderScreen #finder-box`（Ctrl+O の枠）、`HelpScreen > VerticalScroll`（ヘルプの枠）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。タブバーで選択中のタブは `TabBar > .tab-bar--active` で、既定は `text-style: bold underline`。分割しているとき、フォーカスしていないほうのペインの選択中のタブは `TabBar > .tab-bar--unfocused` で、既定は `text-style: bold`。ペインは `Pane`、分割の区切り線は2つ目のペイン `Pane.-second` の枠線。ヘルプのキーの列は `HelpText > .help--key` で、既定は `color: $accent; text-style: bold`。スクロールバーの色は `* { scrollbar-color: ...; }` のように全体に指定する。既定はつまみがグレー（`ansi_bright_black`）、マウスを乗せたりつかんだりしている間は白（`ansi_white`）、溝は端末の背景色で、`scrollbar-color-hover` / `scrollbar-color-active` / `scrollbar-background` などで個別に変えられる。
+主なウィジェット名は `EditorScreen`（画面全体）、`Buffer`（エディタ）、`#sidebar`（サイドバー）、`StatusBar`（下のバー）、`TabBar`（上のタブバー）、`ExplorerScreen #explorer-box`（エクスプローラのオーバーレイの枠）、`FinderScreen #finder-box`（Ctrl+O の枠）、`HelpScreen > VerticalScroll`（ヘルプの枠）。ステータスバーは既定で `text-style: reverse` なので、色を付けるときは `text-style: none` にする。タブバーの `color` は選択していないタブの文字色で、既定はグレー（`ansi_bright_black`）。操作中のペインの選択中のタブは `TabBar > .tab-bar--active` で、既定は `background: $accent; color: ansi_black`。分割しているとき、操作していないほうのペインの選択中のタブは `TabBar > .tab-bar--unfocused` で、既定は `color: ansi_default`（本文と同じ文字色）。ペインは `Pane`、分割の区切り線は2つ目のペイン `Pane.-second` の枠線。ヘルプのキーの列は `HelpText > .help--key` で、既定は `color: $accent; text-style: bold`。スクロールバーの色は `* { scrollbar-color: ...; }` のように全体に指定する。既定はつまみがグレー（`ansi_bright_black`）、マウスを乗せたりつかんだりしている間は白（`ansi_white`）、溝は端末の背景色で、`scrollbar-color-hover` / `scrollbar-color-active` / `scrollbar-background` などで個別に変えられる。
 
 ```css
 StatusBar {
@@ -40,9 +40,19 @@ StatusBar {
     color: #ffffff;
 }
 
-/* バーに色を付けると、選択中のタブはその色の反転になる */
+/* バーは背景より少し明るい色、選択していないタブはくすんだ色 */
 TabBar {
-    background: #ea7599 50%;
+    background: #24133f;
+    color: #8a7fa0;
+}
+/* 操作中のペインの選択中のタブ */
+TabBar > .tab-bar--active {
+    background: #ea7599;
+    color: #ffffff;
+}
+/* 操作していないペインの選択中のタブ（背景はエディタと同じ色にする） */
+TabBar > .tab-bar--unfocused {
+    background: #180b33;
     color: #ffffff;
 }
 ```

@@ -19,12 +19,17 @@ class TabBar(Widget):
     TabBar {
         height: 1;
         width: 1fr;
+        /* 選択していないタブはグレー */
+        color: ansi_bright_black;
     }
+    /* 操作中のペインの選択タブはアクセント色の背景にして、どのペインを操作中か分かるようにする */
     TabBar > .tab-bar--active {
-        text-style: bold underline;
+        background: $accent;
+        color: ansi_black;
     }
+    /* 操作していないペインの選択タブは、本文と同じ文字色にしてグレーのタブと見分ける */
     TabBar > .tab-bar--unfocused {
-        text-style: bold;
+        color: ansi_default;
     }
     """
 

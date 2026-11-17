@@ -304,7 +304,7 @@ async def test_closing_last_tab_of_pane_unsplits(tmp_path: Path) -> None:
         assert app.is_running
 
 
-async def test_inactive_pane_tab_is_bold_without_underline(tmp_path: Path) -> None:
+async def test_active_pane_tab_has_background(tmp_path: Path) -> None:
     a, b = files(tmp_path, "a.txt", "b.txt")
     app = make_app(tmp_path, a, b)
     async with app.run_test() as pilot:
@@ -320,17 +320,17 @@ async def test_inactive_pane_tab_is_bold_without_underline(tmp_path: Path) -> No
             )
             return seg.style
 
-        # 操作中のペインは太字 + 下線、もう一方は太字だけ。どちらも反転しない
-        assert selected_style(right).bold
-        assert selected_style(right).underline
-        assert not selected_style(right).reverse
-        assert selected_style(left).bold
-        assert not selected_style(left).underline
-        assert not selected_style(left).reverse
+        # 操作中のペインの選択タブだけ背景色が付く。太字・下線・反転はどちらにも付けない
+        assert not selected_style(right).bgcolor.is_default
+        assert selected_style(left).bgcolor.is_default
+        for style in (selected_style(right), selected_style(left)):
+            assert not style.bold
+            assert not style.underline
+            assert not style.reverse
         await pilot.press("ctrl+u")
         await pilot.pause()
-        assert selected_style(left).underline
-        assert not selected_style(right).underline
+        assert not selected_style(left).bgcolor.is_default
+        assert selected_style(right).bgcolor.is_default
 
 
 # ---- ドラッグ & ドロップ ----
