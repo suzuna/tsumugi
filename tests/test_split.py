@@ -303,3 +303,101 @@ async def test_inactive_pane_tab_is_not_reversed(tmp_path: Path) -> None:
         await pilot.pause()
         assert selected_style(left).reverse
         assert not selected_style(right).reverse
+
+
+# ---- ドラッグ & ドロップ ----
+
+
+def tab_x(pane, index: int) -> int:
+    """pane のタブバーで index 番目のタブの中ほどの x（タブバーからの相対）。"""
+    start, end = pane.tab_bar._spans[index]
+    return (start + end) // 2
+
+
+async def drag(pilot, src_widget, src_offset, dst_widget, dst_offset) -> None:
+    await pilot.mouse_down(src_widget, offset=src_offset)
+    await pilot.mouse_up(dst_widget, offset=dst_offset)
+    await settle(pilot)
+
+
+async def test_drag_tab_to_other_tab_bar(tmp_path: Path) -> None:
+    a, b, c = files(tmp_path, "a.txt", "b.txt", "c.txt")
+    app = make_app(tmp_path, a, b, c)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        # 右の c.txt を左の先頭のタブの上へ
+        await drag(
+            pilot,
+            right.tab_bar,
+            (tab_x(right, 0), 0),
+            left.tab_bar,
+            (tab_x(left, 0), 0),
+        )
+        assert names(left) == ["c.txt", "a.txt", "b.txt"]
+        assert ed.split is None  # 右が空になったので分割をやめる
+        assert ed.current.path == c
+
+
+async def test_drag_tab_to_other_editor(tmp_path: Path) -> None:
+    a, b, c = files(tmp_path, "a.txt", "b.txt", "c.txt")
+    app = make_app(tmp_path, a, b, c)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        await pilot.press("ctrl+backslash")
+        await settle(pilot)
+        left, right = ed.panes
+        # 左の a.txt を右のエディタ部分へ（末尾に入る）
+        await drag(pilot, left.tab_bar, (tab_x(left, 0), 0), right.current, (5, 3))
+        assert names(left) == ["b.txt"]
+        assert names(right) == ["c.txt", "a.txt"]
+        assert ed.active_pane is right
+        assert app.focused is right.current
+        assert ed.current.path == a
+
+
+async def test_drag_tab_reorders_in_same_bar(tmp_path: Path) -> None:
+    a, b, c = files(tmp_path, "a.txt", "b.txt", "c.txt")
+    app = make_app(tmp_path, a, b, c)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        bar = pane.tab_bar
+        await drag(pilot, bar, (tab_x(pane, 0), 0), bar, (tab_x(pane, 2), 0))
+        assert names(pane) == ["b.txt", "c.txt", "a.txt"]
+        assert ed.current.path == a
+        # タブより右に落としたら末尾へ
+        await drag(pilot, bar, (tab_x(pane, 0), 0), bar, (bar.size.width - 1, 0))
+        assert names(pane) == ["c.txt", "a.txt", "b.txt"]
+
+
+async def test_press_and_release_on_same_tab_is_click(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        assert ed.current.path == b
+        await pilot.click(pane.tab_bar, offset=(tab_x(pane, 0), 0))
+        await settle(pilot)
+        assert ed.current.path == a
+        assert names(pane) == ["a.txt", "b.txt"]
+
+
+async def test_drop_on_own_editor_does_nothing(tmp_path: Path) -> None:
+    a, b = files(tmp_path, "a.txt", "b.txt")
+    app = make_app(tmp_path, a, b)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app.editor
+        (pane,) = ed.panes
+        await drag(pilot, pane.tab_bar, (tab_x(pane, 0), 0), pane.current, (5, 3))
+        assert ed.split is None
+        assert names(pane) == ["a.txt", "b.txt"]
+        assert ed.current.path == b

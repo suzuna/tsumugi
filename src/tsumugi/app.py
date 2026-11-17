@@ -49,6 +49,10 @@ class AfterInput(Message):
     def __init__(self, callback) -> None:
         super().__init__()
         self.callback = callback
+        # Textual は送り主（作ったときに処理中だったウィジェット）を覚えていて、送り主が親に
+        # いるとその親で伝わるのを止める。EditorScreen の中（タブのドロップなど）で作っても
+        # App まで届くように、送り主を持たせない
+        self._sender = None
 
 
 class EditorScreen(Screen[None]):
@@ -308,6 +312,34 @@ class EditorScreen(Screen[None]):
         pane = event.bar.parent
         if isinstance(pane, Pane) and 0 <= event.index < len(pane.buffers):
             self.switch_to(pane.buffers[event.index])
+
+    def on_tab_bar_dropped(self, event: TabBar.Dropped) -> None:
+        """タブのドラッグ & ドロップ。同じタブバーなら並べ替え、隣のペインならそこへ移す。"""
+        src = event.bar.parent
+        if not isinstance(src, Pane) or not 0 <= event.index < len(src.buffers):
+            return
+        buf = src.buffers[event.index]
+        dst = next(
+            (n for n in event.target.ancestors_with_self if isinstance(n, Pane)), None
+        )
+        if dst is None:
+            return
+        if dst is src:
+            # 自分のペインのエディタ部分に落としたときは何もしない
+            if event.target_index is not None:
+                src.move_tab(buf, event.target_index)
+                self.switch_to(buf)
+            return
+        self._after_pending_input(
+            lambda: self._drop_to_pane(buf, dst, event.target_index)
+        )
+
+    async def _drop_to_pane(self, buf: Buffer, dst: Pane, index: int | None) -> None:
+        async with self._layout_lock:
+            # 待っている間に閉じたり分割をやめたりしていたら何もしない
+            if buf not in self.buffers or dst not in self.panes:
+                return
+            await self.move_buffer(buf, dst, index)
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self.refresh_bars()
