@@ -218,8 +218,8 @@ def display_path(root: Path) -> str:
     return "~" if str(rel) == "." else f"~/{rel}"
 
 
-def resolve_dir(text: str, base: Path) -> Path | str:
-    """入力されたパスをディレクトリの絶対パスにする。ディレクトリでなければエラー文を返す。
+def resolve_path(text: str, base: Path) -> Path | str:
+    """入力されたパスを、ディレクトリかファイルの絶対パスにする。どちらでもなければエラー文を返す。
 
     `~` を展開し、相対パスは base から数える。
     """
@@ -227,8 +227,10 @@ def resolve_dir(text: str, base: Path) -> Path | str:
     if not target.is_absolute():
         target = base / target
     target = target.resolve()
-    if not target.is_dir():
-        return f"{display_path(target)} is not a directory"
+    if not target.exists():
+        return f"{display_path(target)} does not exist"
+    if not (target.is_dir() or target.is_file()):
+        return f"{display_path(target)} is not a file or directory"
     return target
 
 
@@ -452,6 +454,13 @@ class ExplorerPanel(Vertical):
         self.post_message(self.Changed(self))
 
 
+# オーバーレイの枠の下に出す案内。g の入力中は入力欄の操作に替える
+EXPLORER_HINT = (
+    "Enter: open/expand  o: cd  g: go to  BS: parent  .: hidden  s: sort  Esc: close"
+)
+GOTO_HINT = "Enter: open  Esc: back to tree"
+
+
 class GoToInput(Input):
     BINDINGS = [
         Binding("escape", "cancel", show=False),
@@ -526,6 +535,7 @@ class GoToBar(Vertical):
         inp.cursor_position = len(initial)
         self._set_error("")
         self.add_class("-visible")
+        self.screen.query_one("#explorer-box").border_subtitle = GOTO_HINT
         inp.focus()
 
     def _set_error(self, text: str) -> None:
@@ -534,6 +544,7 @@ class GoToBar(Vertical):
 
     def hide(self) -> None:
         self.remove_class("-visible")
+        self.screen.query_one("#explorer-box").border_subtitle = EXPLORER_HINT
         self.screen.query_one(FileTree).focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -547,9 +558,13 @@ class GoToBar(Vertical):
         if not event.value.strip():
             self.hide()
             return
-        target = resolve_dir(event.value, screen.root)
+        target = resolve_path(event.value, screen.root)
         if isinstance(target, str):
             self._set_error(target)
+            return
+        if target.is_file():
+            # ツリーでファイルを選んだときと同じく、起点は変えずに開いて閉じる
+            screen.dismiss(target)
             return
         # o と同じく、起点を変えて閉じる。メイン画面への反映は閉じたあとに行う
         screen.panel.set_root(target)
@@ -594,10 +609,7 @@ class ExplorerScreen(ModalScreen[Path | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="explorer-box") as box:
             box.border_title = "Explorer"
-            box.border_subtitle = (
-                "Enter: open/expand  o: cd  g: go to  BS: parent  .: hidden  s: sort"
-                "  Esc: close"
-            )
+            box.border_subtitle = EXPLORER_HINT
             yield ExplorerPanel(
                 self._initial_root, self._initial_show_hidden, self._initial_sort_desc
             )

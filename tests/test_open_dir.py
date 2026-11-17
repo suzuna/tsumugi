@@ -236,19 +236,67 @@ async def test_overlay_g_expands_tilde(
         assert Path.cwd() == root / "proj"
 
 
-@pytest.mark.parametrize("name", ["b.txt", "nope"])
-async def test_overlay_g_rejects_non_directory(root: Path, name: str) -> None:
+async def test_overlay_g_rejects_missing_path(root: Path) -> None:
     app = make_app(root)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await _go_to(pilot, app, name)
+        await _go_to(pilot, app, "nope")
         # エラーを出して、オーバーレイも入力欄も開いたまま
         assert isinstance(app.screen, ExplorerScreen)
         assert _goto_bar(app).visible
         error = str(app.screen.query_one("#goto-error").render())
-        assert "is not a directory" in error
+        assert "does not exist" in error
         assert app.screen.root == root
         assert Path.cwd() == root
+
+
+@pytest.mark.parametrize(
+    ("text", "rel"),
+    [("b.txt", "b.txt"), ("proj/a.md", "proj/a.md"), ("~/proj/a.md", "proj/a.md")],
+)
+async def test_overlay_g_opens_file(
+    root: Path, monkeypatch: pytest.MonkeyPatch, text: str, rel: str
+) -> None:
+    monkeypatch.setenv("HOME", str(root))
+    app = make_app(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _go_to(pilot, app, text)
+        # ツリーでファイルを選んだときと同じく、開いて閉じる。起点は変えない
+        assert not isinstance(app.screen, ExplorerScreen)
+        assert app.editor.current.path == root / rel
+        assert app.focused is app.editor.current
+        assert app.editor.explorer_root == root
+        assert Path.cwd() == root
+
+
+async def test_overlay_g_opens_file_from_moved_root(root: Path) -> None:
+    app = make_app(root / "proj")
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+b")
+        await pilot.pause(0.3)
+        # オーバーレイで上がってからファイルを開くと、上がった分は起点に反映される
+        await pilot.press("backspace", "g")
+        await pilot.pause()
+        app.screen.query_one(GoToInput).value = "b.txt"
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        assert app.editor.current.path == root / "b.txt"
+        assert app.editor.explorer_root == root
+
+
+async def test_overlay_g_shows_hint_while_typing(root: Path) -> None:
+    app = make_app(root)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _open_goto(pilot, app)
+        box = app.screen.query_one("#explorer-box")
+        assert "Esc: back to tree" in box.border_subtitle
+        await pilot.press("escape")
+        await pilot.pause()
+        assert "Esc: back to tree" not in box.border_subtitle
+        assert "g: go to" in box.border_subtitle
 
 
 async def test_overlay_g_switches_sidebar(root: Path) -> None:
