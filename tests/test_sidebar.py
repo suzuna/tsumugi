@@ -54,7 +54,7 @@ async def test_focus_tree(tmp_path: Path) -> None:
         assert app.focused is _tree(app)
 
 
-async def test_select_file_opens_tab_and_keeps_focus(tmp_path: Path) -> None:
+async def test_select_file_opens_tab_and_focuses_it(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("aaa")
     (tmp_path / "b.txt").write_text("bee")
     app = make_app(tmp_path)
@@ -70,15 +70,18 @@ async def test_select_file_opens_tab_and_keeps_focus(tmp_path: Path) -> None:
         # 空の無題バッファは置き換え
         assert len(ed.buffers) == 1
         assert ed.current.path == (tmp_path / "a.txt").resolve()
+        # 開いたファイルにフォーカスが移る
+        assert app.focused is ed.current
+        await pilot.press("ctrl+j")
         assert app.focused is tree
         await pilot.press("down", "enter")
         await pilot.pause()
         assert len(ed.buffers) == 2
         assert ed.current.text == "bee"
         assert ed.query_one(TabBar).display
-        assert app.focused is tree
+        assert app.focused is ed.current
         # 開いてるファイルをもう一度選ぶとそのタブへ
-        await pilot.press("up", "enter")
+        await pilot.press("ctrl+j", "up", "enter")
         await pilot.pause()
         assert len(ed.buffers) == 2
         assert ed.current.path == (tmp_path / "a.txt").resolve()

@@ -233,7 +233,8 @@ async def test_sidebar_opens_in_last_active_pane(tmp_path: Path) -> None:
         await pilot.pause()
         assert names(left) == ["a.txt", "c.txt"]
         assert names(right) == ["b.txt"]
-        assert app.focused is tree
+        assert app.focused is left.current
+        assert left.current.path.name == "c.txt"
 
 
 async def test_switch_pane_skips_sidebar(tmp_path: Path) -> None:

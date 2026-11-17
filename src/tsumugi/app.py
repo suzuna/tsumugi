@@ -266,12 +266,12 @@ class EditorScreen(Screen[None]):
                 buf.document.newline,
             )
 
-    async def open_path(self, path: Path, focus: bool = True) -> None:
-        """ファイルを開く。focus=False ならフォーカスを動かさない（サイドバーから開くとき）。"""
+    async def open_path(self, path: Path) -> None:
+        """ファイルを開いて、そのタブにフォーカスを移す。"""
         path = path.expanduser().resolve()
         for buf in self.buffers:
             if buf.path == path:
-                self.switch_to(buf, focus)
+                self.switch_to(buf)
                 return
         if path.is_dir():
             self.message(f"{path} is a directory")
@@ -298,9 +298,9 @@ class EditorScreen(Screen[None]):
         if cur is not None and cur.is_pristine_empty:
             # 空の無題バッファは置き換える
             await pane.replace(cur, new)
-            self.switch_to(new, focus)
+            self.switch_to(new)
         else:
-            await self.add_buffer(new, focus)
+            await self.add_buffer(new)
         if not path.exists():
             self.message(f"New file: {path}")
 
@@ -949,7 +949,8 @@ class EditorScreen(Screen[None]):
         self, event: DirectoryTree.FileSelected
     ) -> None:
         event.stop()
-        await self.open_path(event.path, focus=False)
+        # サイドバーから開いたら、すぐ書けるよう開いたファイルへフォーカスを移す
+        await self.open_path(event.path)
 
     def action_help(self) -> None:
         self.app.push_screen(HelpScreen(), lambda _: self.app.focus_editor())
