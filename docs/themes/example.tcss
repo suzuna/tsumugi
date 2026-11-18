@@ -1,0 +1,61 @@
+/* 画面全体の背景: 濃い紫 */
+EditorScreen,
+EditorScreen Buffer,
+ExplorerScreen > ExplorerPanel,
+HelpScreen > VerticalScroll {
+    background: #180b33;
+}
+
+/* 下のステータスバー: ピンクの背景に白い文字 */
+StatusBar {
+    text-style: none;
+    background: #ea7599;
+    color: #ffffff;
+}
+
+/* ペインの区切り線 */
+EditorScreen #sidebar {
+    border-right: vkey #ea7599;
+}
+
+/* スクロールバーのつまみ: 明るい淡いピンク（溝は背景と同じ色） */
+* {
+    scrollbar-color: #f5a3c0;
+    scrollbar-color-hover: #f5a3c0;
+    scrollbar-color-active: #f5a3c0;
+    scrollbar-background: #180b33;
+    scrollbar-background-hover: #180b33;
+    scrollbar-background-active: #180b33;
+    scrollbar-corner-color: #180b33;
+}
+
+/* ヘルプのスクロールバーのつまみ: グレー（明るさは上のピンク #f5a3c0 にそろえる） */
+HelpScreen > VerticalScroll {
+    scrollbar-color: #bbbbbb;
+    scrollbar-color-hover: #bbbbbb;
+    scrollbar-color-active: #bbbbbb;
+}
+
+/* タブバー: エディタの紫より少し明るい紫。選択していないタブはくすんだ色 */
+TabBar {
+    background: #24133f;
+    color: #8a7fa0;
+}
+/* 操作中のペインのタブバー: ピンク（#ea7599）を背景の紫に 35% 混ぜた色 */
+TabBar.-focused {
+    background: #613057;
+    color: #a990b8;
+}
+/* サイドバーの見出し: タブバーと同じ色の帯。ツリーにフォーカスがあるときはピンク寄りにする */
+EditorScreen #sidebar RootPath {
+    background: #24133f;
+}
+EditorScreen #sidebar.-focused RootPath {
+    background: #613057;
+}
+/* 選択タブ: エディタと同じ紫の背景に白（本文とつながって見える） */
+TabBar > .tab-bar--active,
+TabBar > .tab-bar--unfocused {
+    background: #180b33;
+    color: #ffffff;
+}
